@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Worker } from '@/types/worker';
 import WorkerForm from '@/components/WorkerForm';
 import HospedajeCalendar from '@/components/HospedajeCalendar';
+import FinancialSummary from '@/components/FinancialSummary';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -69,6 +70,8 @@ const Index = () => {
         </div>
 
         <WorkerForm onAddWorker={addWorker} />
+
+        <FinancialSummary workers={workers} currentMonth={currentMonth} />
 
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
