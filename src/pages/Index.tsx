@@ -1,9 +1,7 @@
-
 import React, { useState } from 'react';
 import { Worker, MonthlyWorkers } from '@/types/worker';
 import WorkerForm from '@/components/WorkerForm';
 import HospedajeCalendar from '@/components/HospedajeCalendar';
-import FinancialSummary from '@/components/FinancialSummary';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -141,7 +139,6 @@ const Index = () => {
               onDeleteWorker={deleteWorker}
             />
             
-            <FinancialSummary workers={currentWorkers} currentMonth={currentMonth} />
           </>
         )}
       </div>
