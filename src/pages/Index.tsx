@@ -96,8 +96,6 @@ const Index = () => {
 
         <WorkerForm onAddWorker={addWorker} />
 
-        <FinancialSummary workers={currentWorkers} currentMonth={currentMonth} />
-
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
@@ -135,12 +133,16 @@ const Index = () => {
             </p>
           </div>
         ) : (
-          <HospedajeCalendar
-            workers={currentWorkers}
-            currentMonth={currentMonth}
-            onToggleHospedaje={toggleHospedaje}
-            onDeleteWorker={deleteWorker}
-          />
+          <>
+            <HospedajeCalendar
+              workers={currentWorkers}
+              currentMonth={currentMonth}
+              onToggleHospedaje={toggleHospedaje}
+              onDeleteWorker={deleteWorker}
+            />
+            
+            <FinancialSummary workers={currentWorkers} currentMonth={currentMonth} />
+          </>
         )}
       </div>
     </div>
