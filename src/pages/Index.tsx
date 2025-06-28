@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Worker } from '@/types/worker';
+import { Worker, MonthlyWorkers } from '@/types/worker';
 import WorkerForm from '@/components/WorkerForm';
 import HospedajeCalendar from '@/components/HospedajeCalendar';
 import FinancialSummary from '@/components/FinancialSummary';
@@ -8,35 +8,58 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const Index = () => {
-  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [monthlyWorkers, setMonthlyWorkers] = useState<MonthlyWorkers>({});
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
+  const getMonthKey = (date: Date) => {
+    return `${date.getFullYear()}-${date.getMonth()}`;
+  };
+
+  const getCurrentMonthWorkers = () => {
+    const monthKey = getMonthKey(currentMonth);
+    return monthlyWorkers[monthKey] || [];
+  };
+
   const addWorker = (name: string, position: string) => {
+    const monthKey = getMonthKey(currentMonth);
     const newWorker: Worker = {
       id: Date.now().toString(),
       name,
       position,
-      hospedaje: {}
+      hospedaje: {},
+      monthYear: monthKey
     };
-    setWorkers([...workers, newWorker]);
+    
+    setMonthlyWorkers(prev => ({
+      ...prev,
+      [monthKey]: [...(prev[monthKey] || []), newWorker]
+    }));
   };
 
   const deleteWorker = (workerId: string) => {
-    setWorkers(workers.filter(worker => worker.id !== workerId));
+    const monthKey = getMonthKey(currentMonth);
+    setMonthlyWorkers(prev => ({
+      ...prev,
+      [monthKey]: (prev[monthKey] || []).filter(worker => worker.id !== workerId)
+    }));
   };
 
   const toggleHospedaje = (workerId: string, date: string) => {
-    setWorkers(workers.map(worker => {
-      if (worker.id === workerId) {
-        return {
-          ...worker,
-          hospedaje: {
-            ...worker.hospedaje,
-            [date]: !worker.hospedaje[date]
-          }
-        };
-      }
-      return worker;
+    const monthKey = getMonthKey(currentMonth);
+    setMonthlyWorkers(prev => ({
+      ...prev,
+      [monthKey]: (prev[monthKey] || []).map(worker => {
+        if (worker.id === workerId) {
+          return {
+            ...worker,
+            hospedaje: {
+              ...worker.hospedaje,
+              [date]: !worker.hospedaje[date]
+            }
+          };
+        }
+        return worker;
+      })
     }));
   };
 
@@ -57,6 +80,8 @@ const Index = () => {
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
 
+  const currentWorkers = getCurrentMonthWorkers();
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
@@ -71,7 +96,7 @@ const Index = () => {
 
         <WorkerForm onAddWorker={addWorker} />
 
-        <FinancialSummary workers={workers} currentMonth={currentMonth} />
+        <FinancialSummary workers={currentWorkers} currentMonth={currentMonth} />
 
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -96,14 +121,14 @@ const Index = () => {
             </Button>
           </div>
           <div className="text-sm text-gray-600">
-            Total trabajadores: {workers.length}
+            Total trabajadores: {currentWorkers.length}
           </div>
         </div>
 
-        {workers.length === 0 ? (
+        {currentWorkers.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
             <p className="text-gray-500 text-lg">
-              No hay trabajadores agregados aún
+              No hay trabajadores agregados para este mes
             </p>
             <p className="text-gray-400 text-sm mt-2">
               Agrega trabajadores usando el formulario de arriba
@@ -111,7 +136,7 @@ const Index = () => {
           </div>
         ) : (
           <HospedajeCalendar
-            workers={workers}
+            workers={currentWorkers}
             currentMonth={currentMonth}
             onToggleHospedaje={toggleHospedaje}
             onDeleteWorker={deleteWorker}

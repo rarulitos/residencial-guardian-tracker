@@ -1,8 +1,9 @@
-
 import React, { useState, useRef } from 'react';
 import { Worker } from '@/types/worker';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Trash2, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -22,6 +23,7 @@ const HospedajeCalendar = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragValue, setDragValue] = useState<boolean>(false);
   const [dragStartCell, setDragStartCell] = useState<{workerId: string, date: string} | null>(null);
+  const [unitPrice, setUnitPrice] = useState<number>(25000);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -45,6 +47,37 @@ const HospedajeCalendar = ({
       }, 0);
       return { day, count };
     });
+  };
+
+  const calculateFinancialSummary = () => {
+    const days = getDaysInMonth(currentMonth);
+    
+    const totalWorkerDays = workers.reduce((total, worker) => {
+      return total + days.reduce((workerTotal, day) => {
+        const dateStr = formatDate(day);
+        return workerTotal + (worker.hospedaje[dateStr] ? 1 : 0);
+      }, 0);
+    }, 0);
+
+    const netTotal = totalWorkerDays * unitPrice;
+    const iva = netTotal * 0.19;
+    const totalToPay = netTotal + iva;
+
+    return {
+      totalWorkerDays,
+      unitPrice,
+      netTotal,
+      iva,
+      totalToPay
+    };
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-CL', {
+      style: 'currency',
+      currency: 'CLP',
+      minimumFractionDigits: 0
+    }).format(amount);
   };
 
   const handleMouseDown = (workerId: string, date: string) => {
@@ -72,6 +105,7 @@ const HospedajeCalendar = ({
   const exportToExcel = () => {
     const days = getDaysInMonth(currentMonth);
     const dayTotals = getDayTotals();
+    const financialSummary = calculateFinancialSummary();
     
     // Crear los datos para Excel
     const excelData = [];
@@ -104,14 +138,23 @@ const HospedajeCalendar = ({
       'TOTAL POR DÍA',
       '',
       ...dayTotals.map(({ count }) => count > 0 ? count : ''),
-      workers.reduce((total, worker) => {
-        return total + days.reduce((workerTotal, day) => {
-          const dateStr = formatDate(day);
-          return workerTotal + (worker.hospedaje[dateStr] ? 1 : 0);
-        }, 0);
-      }, 0)
+      financialSummary.totalWorkerDays
     ];
     excelData.push(totalRow);
+    
+    // Espacios en blanco
+    excelData.push([]);
+    excelData.push([]);
+    
+    // Resumen Financiero
+    excelData.push(['RESUMEN FINANCIERO']);
+    excelData.push([]);
+    excelData.push(['Concepto', 'Valor']);
+    excelData.push(['Total de trabajadores hospedados (días)', financialSummary.totalWorkerDays]);
+    excelData.push(['Precio unitario por alojamiento', formatCurrency(financialSummary.unitPrice)]);
+    excelData.push(['Total neto (sin IVA)', formatCurrency(financialSummary.netTotal)]);
+    excelData.push(['IVA (19%)', formatCurrency(financialSummary.iva)]);
+    excelData.push(['MONTO TOTAL A PAGAR', formatCurrency(financialSummary.totalToPay)]);
     
     // Crear el libro de trabajo
     const ws = XLSX.utils.aoa_to_sheet(excelData);
@@ -141,6 +184,7 @@ const HospedajeCalendar = ({
 
   const days = getDaysInMonth(currentMonth);
   const dayTotals = getDayTotals();
+  const financialSummary = calculateFinancialSummary();
 
   const monthNames = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -154,13 +198,48 @@ const HospedajeCalendar = ({
           <CardTitle>
             {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
           </CardTitle>
-          <Button onClick={exportToExcel} className="flex items-center gap-2">
-            <Download className="h-4 w-4" />
-            Exportar Excel
-          </Button>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="unitPrice" className="text-sm">Precio unitario:</Label>
+              <Input
+                id="unitPrice"
+                type="number"
+                value={unitPrice}
+                onChange={(e) => setUnitPrice(Number(e.target.value))}
+                className="w-32"
+                placeholder="Precio por día"
+              />
+            </div>
+            <Button onClick={exportToExcel} className="flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Exportar Excel
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
+        {/* Resumen financiero rápido */}
+        <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="font-medium">Total días hospedaje:</span>
+              <div className="text-lg font-bold">{financialSummary.totalWorkerDays}</div>
+            </div>
+            <div>
+              <span className="font-medium">Total neto:</span>
+              <div className="text-lg font-bold">{formatCurrency(financialSummary.netTotal)}</div>
+            </div>
+            <div>
+              <span className="font-medium">IVA (19%):</span>
+              <div className="text-lg font-bold">{formatCurrency(financialSummary.iva)}</div>
+            </div>
+            <div>
+              <span className="font-medium">Total a pagar:</span>
+              <div className="text-lg font-bold text-green-600">{formatCurrency(financialSummary.totalToPay)}</div>
+            </div>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full border-collapse select-none">
             <thead>
@@ -229,12 +308,7 @@ const HospedajeCalendar = ({
                   </td>
                 ))}
                 <td className="border p-2 text-center">
-                  {workers.reduce((total, worker) => {
-                    return total + days.reduce((workerTotal, day) => {
-                      const dateStr = formatDate(day);
-                      return workerTotal + (worker.hospedaje[dateStr] ? 1 : 0);
-                    }, 0);
-                  }, 0)}
+                  {financialSummary.totalWorkerDays}
                 </td>
                 <td className="border p-2"></td>
               </tr>
