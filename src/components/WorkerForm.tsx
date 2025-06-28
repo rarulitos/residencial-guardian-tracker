@@ -30,7 +30,7 @@ const WorkerForm = ({ onAddWorker }: WorkerFormProps) => {
       <CardContent>
         <form onSubmit={handleSubmit} className="flex gap-4 items-end">
           <div className="flex-1">
-            <Label htmlFor="name">Nombre</Label>
+            <Label htmlFor="name">Nombre y apellido</Label>
             <Input
               id="name"
               value={name}
