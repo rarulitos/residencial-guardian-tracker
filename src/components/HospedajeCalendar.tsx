@@ -4,7 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Trash2, Download } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Trash2, Download, Calendar as CalendarIcon, CheckSquare, Square } from 'lucide-react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 
 interface HospedajeCalendarProps {
@@ -24,6 +29,12 @@ const HospedajeCalendar = ({
   const [dragValue, setDragValue] = useState<boolean>(false);
   const [dragStartCell, setDragStartCell] = useState<{workerId: string, date: string} | null>(null);
   const [unitPrice, setUnitPrice] = useState<number>(25000);
+  
+  // Date range selection states
+  const [showRangeSelector, setShowRangeSelector] = useState(false);
+  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [endDate, setEndDate] = useState<Date | undefined>();
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string>('all');
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -100,6 +111,59 @@ const HospedajeCalendar = ({
   const handleMouseUp = () => {
     setIsDragging(false);
     setDragStartCell(null);
+  };
+
+  // Date range functions
+  const getDateRange = () => {
+    if (!startDate || !endDate) return [];
+    
+    const dates = [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    // Ensure dates are in current month
+    const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+    
+    const rangeStart = start < monthStart ? monthStart : start;
+    const rangeEnd = end > monthEnd ? monthEnd : end;
+    
+    for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
+      dates.push(d.toISOString().split('T')[0]);
+    }
+    
+    return dates;
+  };
+
+  const applyRangeSelection = (markSelected: boolean) => {
+    const dateRange = getDateRange();
+    if (dateRange.length === 0) return;
+
+    const workersToUpdate = selectedWorkerId === 'all' 
+      ? workers 
+      : workers.filter(w => w.id === selectedWorkerId);
+
+    workersToUpdate.forEach(worker => {
+      dateRange.forEach(dateStr => {
+        const currentValue = worker.hospedaje[dateStr] || false;
+        if (currentValue !== markSelected) {
+          onToggleHospedaje(worker.id, dateStr);
+        }
+      });
+    });
+  };
+
+  const resetRangeSelector = () => {
+    setStartDate(undefined);
+    setEndDate(undefined);
+    setSelectedWorkerId('all');
+    setShowRangeSelector(false);
+  };
+
+  const isDateInRange = (day: number) => {
+    if (!startDate || !endDate) return false;
+    const dateStr = formatDate(day);
+    return getDateRange().includes(dateStr);
   };
 
   const exportToExcel = () => {
@@ -240,6 +304,151 @@ const HospedajeCalendar = ({
           </div>
         </div>
 
+        {/* Date Range Selector */}
+        <div className="mb-4">
+          <Button
+            onClick={() => setShowRangeSelector(!showRangeSelector)}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <CalendarIcon className="h-4 w-4" />
+            Seleccionar Rango de Fechas
+          </Button>
+          
+          {showRangeSelector && (
+            <div className="mt-4 p-4 border rounded-lg bg-gray-50">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Start Date */}
+                <div>
+                  <Label>Fecha inicial</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !startDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {startDate ? format(startDate, "dd/MM/yyyy") : "Seleccionar"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={startDate}
+                        onSelect={setStartDate}
+                        disabled={(date) => {
+                          const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+                          const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+                          return date < monthStart || date > monthEnd;
+                        }}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* End Date */}
+                <div>
+                  <Label>Fecha final</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !endDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {endDate ? format(endDate, "dd/MM/yyyy") : "Seleccionar"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={endDate}
+                        onSelect={setEndDate}
+                        disabled={(date) => {
+                          const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+                          const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+                          return date < monthStart || date > monthEnd || (startDate && date < startDate);
+                        }}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Worker Selector */}
+                <div>
+                  <Label>Trabajador</Label>
+                  <Select value={selectedWorkerId} onValueChange={setSelectedWorkerId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar trabajador" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los trabajadores</SelectItem>
+                      {workers.map(worker => (
+                        <SelectItem key={worker.id} value={worker.id}>
+                          {worker.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-col gap-2">
+                  <Label>Acciones</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => applyRangeSelection(true)}
+                      disabled={!startDate || !endDate}
+                      size="sm"
+                      className="flex items-center gap-1"
+                    >
+                      <CheckSquare className="h-4 w-4" />
+                      Marcar
+                    </Button>
+                    <Button
+                      onClick={() => applyRangeSelection(false)}
+                      disabled={!startDate || !endDate}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-1"
+                    >
+                      <Square className="h-4 w-4" />
+                      Desmarcar
+                    </Button>
+                  </div>
+                  <Button
+                    onClick={resetRangeSelector}
+                    variant="ghost"
+                    size="sm"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+              
+              {startDate && endDate && (
+                <div className="mt-3 p-2 bg-blue-100 rounded text-sm">
+                  <strong>Rango seleccionado:</strong> {getDateRange().length} días 
+                  ({format(startDate, "dd/MM")} - {format(endDate, "dd/MM")})
+                  {selectedWorkerId !== 'all' && (
+                    <span> para {workers.find(w => w.id === selectedWorkerId)?.name}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full border-collapse select-none">
             <thead>
@@ -269,15 +478,18 @@ const HospedajeCalendar = ({
                     {days.map(day => {
                       const dateStr = formatDate(day);
                       const isChecked = worker.hospedaje[dateStr] || false;
+                      const inRange = isDateInRange(day);
                       return (
-                        <td key={day} className="border p-1 text-center">
+                        <td key={day} className={`border p-1 text-center ${inRange ? 'bg-yellow-50' : ''}`}>
                           <div
                             onMouseDown={() => handleMouseDown(worker.id, dateStr)}
                             onMouseEnter={() => handleMouseEnter(worker.id, dateStr)}
                             className={`w-6 h-6 mx-auto rounded border-2 transition-colors cursor-pointer flex items-center justify-center ${
                               isChecked 
                                 ? 'bg-blue-500 border-blue-500' 
-                                : 'bg-white border-gray-300 hover:border-blue-300'
+                                : inRange
+                                  ? 'bg-yellow-200 border-yellow-400 hover:border-yellow-500'
+                                  : 'bg-white border-gray-300 hover:border-blue-300'
                             }`}
                           >
                             {isChecked && <span className="text-white text-xs font-bold">✓</span>}
