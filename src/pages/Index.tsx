@@ -9,44 +9,44 @@ const Index = () => {
   const [monthlyWorkers, setMonthlyWorkers] = useState<MonthlyWorkers>({});
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  const getMonthKey = (date: Date) => {
+  const getBillingPeriodKey = (date: Date) => {
     return `${date.getFullYear()}-${date.getMonth()}`;
   };
 
-  const getCurrentMonthWorkers = () => {
-    const monthKey = getMonthKey(currentMonth);
-    return monthlyWorkers[monthKey] || [];
+  const getCurrentPeriodWorkers = () => {
+    const periodKey = getBillingPeriodKey(currentMonth);
+    return monthlyWorkers[periodKey] || [];
   };
 
   const addWorker = (name: string, position: string) => {
-    const monthKey = getMonthKey(currentMonth);
+    const periodKey = getBillingPeriodKey(currentMonth);
     const newWorker: Worker = {
       id: Date.now().toString(),
       name,
       position,
       hospedaje: {},
-      monthYear: monthKey
+      monthYear: periodKey
     };
     
     setMonthlyWorkers(prev => ({
       ...prev,
-      [monthKey]: [...(prev[monthKey] || []), newWorker]
+      [periodKey]: [...(prev[periodKey] || []), newWorker]
     }));
   };
 
   const deleteWorker = (workerId: string) => {
-    const monthKey = getMonthKey(currentMonth);
+    const periodKey = getBillingPeriodKey(currentMonth);
     setMonthlyWorkers(prev => ({
       ...prev,
-      [monthKey]: (prev[monthKey] || []).filter(worker => worker.id !== workerId)
+      [periodKey]: (prev[periodKey] || []).filter(worker => worker.id !== workerId)
     }));
   };
 
   const toggleHospedaje = (workerId: string, date: string) => {
-    const monthKey = getMonthKey(currentMonth);
+    const periodKey = getBillingPeriodKey(currentMonth);
     setMonthlyWorkers(prev => ({
       ...prev,
-      [monthKey]: (prev[monthKey] || []).map(worker => {
+      [periodKey]: (prev[periodKey] || []).map(worker => {
         if (worker.id === workerId) {
           return {
             ...worker,
@@ -78,7 +78,7 @@ const Index = () => {
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
 
-  const currentWorkers = getCurrentMonthWorkers();
+  const currentWorkers = getCurrentPeriodWorkers();
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -102,17 +102,17 @@ const Index = () => {
               className="flex items-center gap-2"
             >
               <ChevronLeft className="h-4 w-4" />
-              Mes Anterior
+              Período Anterior
             </Button>
             <h2 className="text-xl font-semibold">
-              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+              Período {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </h2>
             <Button
               variant="outline"
               onClick={() => changeMonth('next')}
               className="flex items-center gap-2"
             >
-              Mes Siguiente
+              Período Siguiente
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -124,7 +124,7 @@ const Index = () => {
         {currentWorkers.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
             <p className="text-gray-500 text-lg">
-              No hay trabajadores agregados para este mes
+              No hay trabajadores agregados para este período
             </p>
             <p className="text-gray-400 text-sm mt-2">
               Agrega trabajadores usando el formulario de arriba

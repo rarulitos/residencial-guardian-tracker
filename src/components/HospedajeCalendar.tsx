@@ -37,36 +37,59 @@ const HospedajeCalendar = ({
   const [endDate, setEndDate] = useState<Date | undefined>();
   const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
 
-  const getDaysInMonth = (date: Date) => {
+  const getBillingPeriodRange = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    return Array.from({ length: daysInMonth }, (_, i) => i + 1);
+    
+    // Período de facturación: del 21 del mes anterior al 21 del mes actual
+    const startDate = new Date(year, month - 1, 21);
+    const endDate = new Date(year, month, 21);
+    
+    return { startDate, endDate };
   };
 
-  const formatDate = (day: number) => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
-    return new Date(year, month, day).toISOString().split('T')[0];
+  const getBillingPeriodDays = (date: Date) => {
+    const { startDate, endDate } = getBillingPeriodRange(date);
+    const days: { day: number, month: number, year: number, date: Date }[] = [];
+    
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      days.push({
+        day: d.getDate(),
+        month: d.getMonth(),
+        year: d.getFullYear(),
+        date: new Date(d)
+      });
+    }
+    
+    return days;
+  };
+
+  const getDayOfWeek = (date: Date) => {
+    const days = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
+    return days[date.getDay()];
+  };
+
+  const formatDateFromDayData = (dayData: { day: number, month: number, year: number }) => {
+    return new Date(dayData.year, dayData.month, dayData.day).toISOString().split('T')[0];
   };
 
   const getDayTotals = () => {
-    const days = getDaysInMonth(currentMonth);
-    return days.map(day => {
-      const dateStr = formatDate(day);
+    const days = getBillingPeriodDays(currentMonth);
+    return days.map(dayData => {
+      const dateStr = formatDateFromDayData(dayData);
       const count = workers.reduce((total, worker) => {
         return total + (worker.hospedaje[dateStr] ? 1 : 0);
       }, 0);
-      return { day, count };
+      return { dayData, count };
     });
   };
 
   const calculateFinancialSummary = () => {
-    const days = getDaysInMonth(currentMonth);
+    const days = getBillingPeriodDays(currentMonth);
     
     const totalWorkerDays = workers.reduce((total, worker) => {
-      return total + days.reduce((workerTotal, day) => {
-        const dateStr = formatDate(day);
+      return total + days.reduce((workerTotal, dayData) => {
+        const dateStr = formatDateFromDayData(dayData);
         return workerTotal + (worker.hospedaje[dateStr] ? 1 : 0);
       }, 0);
     }, 0);
@@ -122,12 +145,11 @@ const HospedajeCalendar = ({
     const start = new Date(startDate);
     const end = new Date(endDate);
     
-    // Ensure dates are in current month
-    const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-    const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+    // Ensure dates are in current billing period
+    const { startDate: periodStart, endDate: periodEnd } = getBillingPeriodRange(currentMonth);
     
-    const rangeStart = start < monthStart ? monthStart : start;
-    const rangeEnd = end > monthEnd ? monthEnd : end;
+    const rangeStart = start < periodStart ? periodStart : start;
+    const rangeEnd = end > periodEnd ? periodEnd : end;
     
     for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
       dates.push(d.toISOString().split('T')[0]);
@@ -169,36 +191,36 @@ const HospedajeCalendar = ({
     setShowRangeSelector(false);
   };
 
-  const isDateInRange = (day: number) => {
+  const isDateInRange = (dayData: { day: number, month: number, year: number }) => {
     if (!startDate || !endDate) return false;
-    const dateStr = formatDate(day);
+    const dateStr = formatDateFromDayData(dayData);
     return getDateRange().includes(dateStr);
   };
 
   const exportToExcel = () => {
-    const days = getDaysInMonth(currentMonth);
+    const days = getBillingPeriodDays(currentMonth);
     const dayTotals = getDayTotals();
     const financialSummary = calculateFinancialSummary();
     
     // Crear los datos para Excel
     const excelData = [];
     
-    // Header
-    const header = ['Trabajador', 'Cargo', ...days.map(d => d.toString()), 'Total'];
+    // Header con días y meses
+    const header = ['Trabajador', 'Cargo', ...days.map(d => `${d.day}/${d.month + 1}`), 'Total'];
     excelData.push(header);
     
     // Datos de trabajadores
     workers.forEach(worker => {
-      const workerTotal = days.reduce((total, day) => {
-        const dateStr = formatDate(day);
+      const workerTotal = days.reduce((total, dayData) => {
+        const dateStr = formatDateFromDayData(dayData);
         return total + (worker.hospedaje[dateStr] ? 1 : 0);
       }, 0);
       
       const row = [
         worker.name,
         worker.position,
-        ...days.map(day => {
-          const dateStr = formatDate(day);
+        ...days.map(dayData => {
+          const dateStr = formatDateFromDayData(dayData);
           return worker.hospedaje[dateStr] ? 'X' : '';
         }),
         workerTotal
@@ -237,25 +259,26 @@ const HospedajeCalendar = ({
     const colWidths = [
       { wch: 20 }, // Trabajador
       { wch: 15 }, // Cargo
-      ...days.map(() => ({ wch: 4 })), // Días
+      ...days.map(() => ({ wch: 6 })), // Días
       { wch: 8 } // Total
     ];
     ws['!cols'] = colWidths;
     
     XLSX.utils.book_append_sheet(wb, ws, 'Hospedaje');
     
-    // Generar nombre del archivo
+    // Generar nombre del archivo con período de facturación
+    const { startDate: periodStart, endDate: periodEnd } = getBillingPeriodRange(currentMonth);
     const monthNames = [
       'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
       'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
     ];
-    const fileName = `Hospedaje_${monthNames[currentMonth.getMonth()]}_${currentMonth.getFullYear()}.xlsx`;
+    const fileName = `Hospedaje_Periodo_${format(periodStart, 'dd-MMM')}_${format(periodEnd, 'dd-MMM')}_${currentMonth.getFullYear()}.xlsx`;
     
     // Descargar el archivo
     XLSX.writeFile(wb, fileName);
   };
 
-  const days = getDaysInMonth(currentMonth);
+  const days = getBillingPeriodDays(currentMonth);
   const dayTotals = getDayTotals();
   const financialSummary = calculateFinancialSummary();
 
@@ -269,7 +292,10 @@ const HospedajeCalendar = ({
       <CardHeader>
         <div className="flex justify-between items-center">
           <CardTitle>
-            {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            Período {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            <div className="text-sm font-normal text-gray-600">
+              {format(getBillingPeriodRange(currentMonth).startDate, 'dd MMM')} - {format(getBillingPeriodRange(currentMonth).endDate, 'dd MMM')}
+            </div>
           </CardTitle>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -349,9 +375,8 @@ const HospedajeCalendar = ({
                         selected={startDate}
                         onSelect={setStartDate}
                         disabled={(date) => {
-                          const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-                          const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
-                          return date < monthStart || date > monthEnd;
+                          const { startDate: periodStart, endDate: periodEnd } = getBillingPeriodRange(currentMonth);
+                          return date < periodStart || date > periodEnd;
                         }}
                         initialFocus
                         className={cn("p-3 pointer-events-auto")}
@@ -382,9 +407,8 @@ const HospedajeCalendar = ({
                         selected={endDate}
                         onSelect={setEndDate}
                         disabled={(date) => {
-                          const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-                          const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
-                          return date < monthStart || date > monthEnd || (startDate && date < startDate);
+                          const { startDate: periodStart, endDate: periodEnd } = getBillingPeriodRange(currentMonth);
+                          return date < periodStart || date > periodEnd || (startDate && date < startDate);
                         }}
                         initialFocus
                         className={cn("p-3 pointer-events-auto")}
@@ -501,22 +525,31 @@ const HospedajeCalendar = ({
         <div className="overflow-x-auto">
           <table className="w-full border-collapse select-none">
             <thead>
+              {/* Primera fila: días de la semana */}
               <tr>
-                <th className="border p-2 bg-gray-50 text-left min-w-[150px]">Trabajador</th>
-                <th className="border p-2 bg-gray-50 text-left min-w-[100px]">Cargo</th>
-                {days.map(day => (
-                  <th key={day} className="border p-2 bg-gray-50 text-center min-w-[30px] text-xs">
-                    {day}
+                <th className="border p-1 bg-gray-50 text-left min-w-[150px]" rowSpan={2}>Trabajador</th>
+                <th className="border p-1 bg-gray-50 text-left min-w-[100px]" rowSpan={2}>Cargo</th>
+                {days.map(dayData => (
+                  <th key={`dow-${dayData.day}-${dayData.month}`} className="border p-1 bg-gray-50 text-center min-w-[35px] text-xs">
+                    {getDayOfWeek(dayData.date)}
                   </th>
                 ))}
-                <th className="border p-2 bg-gray-50 text-center min-w-[60px]">Total</th>
-                <th className="border p-2 bg-gray-50 text-center min-w-[50px]">Acción</th>
+                <th className="border p-1 bg-gray-50 text-center min-w-[60px]" rowSpan={2}>Total</th>
+                <th className="border p-1 bg-gray-50 text-center min-w-[50px]" rowSpan={2}>Acción</th>
+              </tr>
+              {/* Segunda fila: números de días */}
+              <tr>
+                {days.map(dayData => (
+                  <th key={`day-${dayData.day}-${dayData.month}`} className="border p-1 bg-gray-50 text-center min-w-[35px] text-xs">
+                    {dayData.day}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
               {workers.map(worker => {
-                const workerTotal = days.reduce((total, day) => {
-                  const dateStr = formatDate(day);
+                const workerTotal = days.reduce((total, dayData) => {
+                  const dateStr = formatDateFromDayData(dayData);
                   return total + (worker.hospedaje[dateStr] ? 1 : 0);
                 }, 0);
 
@@ -524,12 +557,13 @@ const HospedajeCalendar = ({
                   <tr key={worker.id}>
                     <td className="border p-2 font-medium">{worker.name}</td>
                     <td className="border p-2 text-sm text-gray-600">{worker.position}</td>
-                    {days.map(day => {
-                      const dateStr = formatDate(day);
+                    {days.map(dayData => {
+                      const dateStr = formatDateFromDayData(dayData);
                       const isChecked = worker.hospedaje[dateStr] || false;
-                      const inRange = isDateInRange(day);
+                      const inRange = isDateInRange(dayData);
+                      const isNewMonth = dayData.month !== currentMonth.getMonth();
                       return (
-                        <td key={day} className={`border p-1 text-center ${inRange ? 'bg-yellow-50' : ''}`}>
+                        <td key={`cell-${dayData.day}-${dayData.month}`} className={`border p-1 text-center ${inRange ? 'bg-yellow-50' : ''} ${isNewMonth ? 'bg-gray-100' : ''}`}>
                           <div
                             onMouseDown={() => handleMouseDown(worker.id, dateStr)}
                             onMouseEnter={() => handleMouseEnter(worker.id, dateStr)}
@@ -563,8 +597,8 @@ const HospedajeCalendar = ({
               {/* Fila de totales */}
               <tr className="bg-gray-100 font-bold">
                 <td className="border p-2" colSpan={2}>TOTAL POR DÍA</td>
-                {dayTotals.map(({ day, count }) => (
-                  <td key={day} className="border p-2 text-center">
+                {dayTotals.map(({ dayData, count }) => (
+                  <td key={`total-${dayData.day}-${dayData.month}`} className="border p-2 text-center">
                     {count > 0 ? count : '-'}
                   </td>
                 ))}
