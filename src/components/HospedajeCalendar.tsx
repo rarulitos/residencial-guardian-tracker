@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Download, Calendar as CalendarIcon, CheckSquare, Square, X } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Trash2, Download, Calendar as CalendarIcon, CheckSquare, Square, X, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
@@ -34,7 +35,7 @@ const HospedajeCalendar = ({
   const [showRangeSelector, setShowRangeSelector] = useState(false);
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
-  const [selectedWorkerId, setSelectedWorkerId] = useState<string>('all');
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -139,9 +140,9 @@ const HospedajeCalendar = ({
     const dateRange = getDateRange();
     if (dateRange.length === 0) return;
 
-    const workersToUpdate = selectedWorkerId === 'all' 
+    const workersToUpdate = selectedWorkerIds.length === 0 
       ? workers 
-      : workers.filter(w => w.id === selectedWorkerId);
+      : workers.filter(w => selectedWorkerIds.includes(w.id));
 
     workersToUpdate.forEach(worker => {
       dateRange.forEach(dateStr => {
@@ -153,10 +154,18 @@ const HospedajeCalendar = ({
     });
   };
 
+  const toggleWorkerSelection = (workerId: string) => {
+    setSelectedWorkerIds(prev => 
+      prev.includes(workerId)
+        ? prev.filter(id => id !== workerId)
+        : [...prev, workerId]
+    );
+  };
+
   const resetRangeSelector = () => {
     setStartDate(undefined);
     setEndDate(undefined);
-    setSelectedWorkerId('all');
+    setSelectedWorkerIds([]);
     setShowRangeSelector(false);
   };
 
@@ -384,22 +393,61 @@ const HospedajeCalendar = ({
                   </Popover>
                 </div>
 
-                {/* Worker Selector */}
+                {/* Worker Multi-Selector */}
                 <div>
-                  <Label>Trabajador</Label>
-                  <Select value={selectedWorkerId} onValueChange={setSelectedWorkerId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar trabajador" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos los trabajadores</SelectItem>
-                      {workers.map(worker => (
-                        <SelectItem key={worker.id} value={worker.id}>
-                          {worker.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Trabajadores</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-between text-left font-normal"
+                      >
+                        <span>
+                          {selectedWorkerIds.length === 0 
+                            ? "Todos los trabajadores" 
+                            : selectedWorkerIds.length === workers.length
+                              ? "Todos seleccionados"
+                              : `${selectedWorkerIds.length} seleccionados`
+                          }
+                        </span>
+                        <ChevronDown className="h-4 w-4 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-3" align="start">
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="select-all"
+                            checked={selectedWorkerIds.length === workers.length}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedWorkerIds(workers.map(w => w.id));
+                              } else {
+                                setSelectedWorkerIds([]);
+                              }
+                            }}
+                          />
+                          <Label htmlFor="select-all" className="font-medium">
+                            Seleccionar todos
+                          </Label>
+                        </div>
+                        <div className="border-t pt-2">
+                          {workers.map(worker => (
+                            <div key={worker.id} className="flex items-center space-x-2 py-1">
+                              <Checkbox
+                                id={worker.id}
+                                checked={selectedWorkerIds.includes(worker.id)}
+                                onCheckedChange={() => toggleWorkerSelection(worker.id)}
+                              />
+                              <Label htmlFor={worker.id} className="text-sm">
+                                {worker.name}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
                 {/* Action Buttons */}
@@ -441,8 +489,8 @@ const HospedajeCalendar = ({
                 <div className="mt-3 p-2 bg-blue-100 rounded text-sm">
                   <strong>Rango seleccionado:</strong> {getDateRange().length} días 
                   ({format(startDate, "dd/MM")} - {format(endDate, "dd/MM")})
-                  {selectedWorkerId !== 'all' && (
-                    <span> para {workers.find(w => w.id === selectedWorkerId)?.name}</span>
+                  {selectedWorkerIds.length > 0 && selectedWorkerIds.length < workers.length && (
+                    <span> para {selectedWorkerIds.length} trabajador{selectedWorkerIds.length > 1 ? 'es' : ''} seleccionado{selectedWorkerIds.length > 1 ? 's' : ''}</span>
                   )}
                 </div>
               )}
