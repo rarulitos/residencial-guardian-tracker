@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Download, Calendar as CalendarIcon, CheckSquare, Square } from 'lucide-react';
+import { Trash2, Download, Calendar as CalendarIcon, CheckSquare, Square, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
@@ -425,14 +425,15 @@ const HospedajeCalendar = ({
                       <Square className="h-4 w-4" />
                       Desmarcar
                     </Button>
+                    <Button
+                      onClick={resetRangeSelector}
+                      variant="ghost"
+                      size="sm"
+                      className="flex items-center justify-center w-8 h-8 p-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button
-                    onClick={resetRangeSelector}
-                    variant="ghost"
-                    size="sm"
-                  >
-                    Cancelar
-                  </Button>
                 </div>
               </div>
               
