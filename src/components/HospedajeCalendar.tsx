@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
+import { useToast } from '@/hooks/use-toast';
 
 interface HospedajeCalendarProps {
   workers: Worker[];
@@ -31,11 +32,13 @@ const HospedajeCalendar = ({
   const [dragValue, setDragValue] = useState<boolean>(false);
   const [dragStartCell, setDragStartCell] = useState<{workerId: string, date: string} | null>(null);
   const [unitPrice, setUnitPrice] = useState<number>(25000);
+  const { toast } = useToast();
   
   // Custom period configuration states
   const [useCustomPeriod, setUseCustomPeriod] = useState(false);
   const [customPeriodStart, setCustomPeriodStart] = useState<Date | undefined>();
   const [customPeriodEnd, setCustomPeriodEnd] = useState<Date | undefined>();
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   // Date range selection states
   const [showRangeSelector, setShowRangeSelector] = useState(false);
@@ -69,12 +72,26 @@ const HospedajeCalendar = ({
     if (customPeriodStart >= customPeriodEnd) return;
     
     setUseCustomPeriod(true);
+    setIsModalOpen(false);
+    
+    const totalDays = Math.ceil((customPeriodEnd.getTime() - customPeriodStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    
+    toast({
+      title: "Período personalizado aplicado",
+      description: `Período configurado: ${format(customPeriodStart, 'dd/MM/yyyy')} - ${format(customPeriodEnd, 'dd/MM/yyyy')} (${totalDays} días)`,
+    });
   };
 
   const resetToStandardPeriod = () => {
     setUseCustomPeriod(false);
     setCustomPeriodStart(undefined);
     setCustomPeriodEnd(undefined);
+    setIsModalOpen(false);
+    
+    toast({
+      title: "Período estándar aplicado",
+      description: "Se ha restablecido el período estándar (21-21)",
+    });
   };
 
   const getBillingPeriodDays = (date: Date) => {
@@ -338,7 +355,7 @@ const HospedajeCalendar = ({
                 placeholder="Precio por día"
               />
             </div>
-            <Dialog>
+            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="flex items-center gap-2">
                   <Settings className="h-4 w-4" />
