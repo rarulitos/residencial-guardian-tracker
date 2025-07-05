@@ -8,8 +8,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
 import { Trash2, Download, Calendar as CalendarIcon, CheckSquare, Square, X, ChevronDown, Settings } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
@@ -36,7 +36,6 @@ const HospedajeCalendar = ({
   const [useCustomPeriod, setUseCustomPeriod] = useState(false);
   const [customPeriodStart, setCustomPeriodStart] = useState<Date | undefined>();
   const [customPeriodEnd, setCustomPeriodEnd] = useState<Date | undefined>();
-  const [showPeriodConfig, setShowPeriodConfig] = useState(false);
   
   // Date range selection states
   const [showRangeSelector, setShowRangeSelector] = useState(false);
@@ -70,14 +69,12 @@ const HospedajeCalendar = ({
     if (customPeriodStart >= customPeriodEnd) return;
     
     setUseCustomPeriod(true);
-    setShowPeriodConfig(false);
   };
 
   const resetToStandardPeriod = () => {
     setUseCustomPeriod(false);
     setCustomPeriodStart(undefined);
     setCustomPeriodEnd(undefined);
-    setShowPeriodConfig(false);
   };
 
   const getBillingPeriodDays = (date: Date) => {
@@ -341,41 +338,19 @@ const HospedajeCalendar = ({
                 placeholder="Precio por día"
               />
             </div>
-            <Button onClick={exportToExcel} className="flex items-center gap-2">
-              <Download className="h-4 w-4" />
-              Exportar Excel
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {/* Period Configuration */}
-        <div className="mb-4">
-          <Button
-            onClick={() => setShowPeriodConfig(!showPeriodConfig)}
-            variant="outline"
-            className="flex items-center gap-2"
-          >
-            <Settings className="h-4 w-4" />
-            Configurar Período
-          </Button>
-          
-          {showPeriodConfig && (
-            <div className="mt-4 p-4 border rounded-lg bg-gray-50">
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="custom-period"
-                    checked={useCustomPeriod}
-                    onCheckedChange={setUseCustomPeriod}
-                  />
-                  <Label htmlFor="custom-period" className="font-medium">
-                    Usar período personalizado
-                  </Label>
-                </div>
-                
-                {useCustomPeriod && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Configurar Período
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                  <DialogTitle>Configurar Período de Facturación</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Custom Start Date */}
                     <div>
                       <Label>Fecha de inicio del período</Label>
@@ -432,52 +407,50 @@ const HospedajeCalendar = ({
                         </PopoverContent>
                       </Popover>
                     </div>
+                  </div>
 
-                    {/* Actions */}
-                    <div className="flex flex-col gap-2">
-                      <Label>Acciones</Label>
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={applyCustomPeriod}
-                          disabled={!customPeriodStart || !customPeriodEnd || customPeriodStart >= customPeriodEnd}
-                          size="sm"
-                          className="flex-1"
-                        >
-                          Aplicar Período
-                        </Button>
-                        <Button
-                          onClick={resetToStandardPeriod}
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                        >
-                          Período Estándar
-                        </Button>
-                      </div>
+                  {/* Period Summary */}
+                  <div className="p-3 bg-blue-50 rounded text-sm">
+                    <div className="font-medium mb-1">
+                      {useCustomPeriod ? 'Período Personalizado Activo' : 'Período Estándar (21-21)'}
+                    </div>
+                    <div>
+                      <strong>Rango:</strong> {format(getBillingPeriodRange(currentMonth).startDate, 'dd/MM/yyyy')} - {format(getBillingPeriodRange(currentMonth).endDate, 'dd/MM/yyyy')}
+                    </div>
+                    <div>
+                      <strong>Total días:</strong> {days.length} días
+                      {useCustomPeriod && customPeriodStart && customPeriodEnd && (
+                        <span className="text-green-600 font-medium"> (personalizado)</span>
+                      )}
                     </div>
                   </div>
-                )}
-                
-                {/* Period Summary */}
-                <div className="mt-3 p-3 bg-blue-100 rounded text-sm">
-                  <div className="font-medium mb-1">
-                    {useCustomPeriod ? 'Período Personalizado Activo' : 'Período Estándar (21-21)'}
-                  </div>
-                  <div>
-                    <strong>Rango:</strong> {format(getBillingPeriodRange(currentMonth).startDate, 'dd/MM/yyyy')} - {format(getBillingPeriodRange(currentMonth).endDate, 'dd/MM/yyyy')}
-                  </div>
-                  <div>
-                    <strong>Total días:</strong> {days.length} días
-                    {useCustomPeriod && customPeriodStart && customPeriodEnd && (
-                      <span className="text-green-600 font-medium"> (personalizado)</span>
-                    )}
+
+                  {/* Actions */}
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      onClick={resetToStandardPeriod}
+                      variant="outline"
+                    >
+                      Período Estándar
+                    </Button>
+                    <Button
+                      onClick={applyCustomPeriod}
+                      disabled={!customPeriodStart || !customPeriodEnd || customPeriodStart >= customPeriodEnd}
+                    >
+                      Aplicar Período
+                    </Button>
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
+              </DialogContent>
+            </Dialog>
+            <Button onClick={exportToExcel} className="flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Exportar Excel
+            </Button>
+          </div>
         </div>
-
+      </CardHeader>
+      <CardContent>
         {/* Resumen financiero rápido */}
         <div className="mb-4 p-4 bg-blue-50 rounded-lg">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
