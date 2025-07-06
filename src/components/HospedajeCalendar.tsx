@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Trash2, Download, Calendar as CalendarIcon, CheckSquare, Square, X, ChevronDown, Settings } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -78,7 +79,7 @@ const HospedajeCalendar = ({
     
     toast({
       title: "Período personalizado aplicado",
-      description: `Período configurado: ${format(customPeriodStart, 'dd/MM/yyyy')} - ${format(customPeriodEnd, 'dd/MM/yyyy')} (${totalDays} días)`,
+      description: `Período configurado: ${format(customPeriodStart, 'dd/MM/yyyy', { locale: es })} - ${format(customPeriodEnd, 'dd/MM/yyyy', { locale: es })} (${totalDays} días)`,
     });
   };
 
@@ -318,7 +319,7 @@ const HospedajeCalendar = ({
       'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
       'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
     ];
-    const fileName = `Hospedaje_Periodo_${format(periodStart, 'dd-MMM')}_${format(periodEnd, 'dd-MMM')}_${currentMonth.getFullYear()}.xlsx`;
+    const fileName = `Hospedaje_Periodo_${format(periodStart, 'dd-MMM', { locale: es })}_${format(periodEnd, 'dd-MMM', { locale: es })}_${currentMonth.getFullYear()}.xlsx`;
     
     // Descargar el archivo
     XLSX.writeFile(wb, fileName);
@@ -339,9 +340,9 @@ const HospedajeCalendar = ({
         <div className="flex justify-between items-center">
           <CardTitle>
             Período {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-            <div className="text-sm font-normal text-gray-600">
-              {format(getBillingPeriodRange(currentMonth).startDate, 'dd MMM')} - {format(getBillingPeriodRange(currentMonth).endDate, 'dd MMM')}
-            </div>
+              <div className="text-sm font-normal text-gray-600">
+                {format(getBillingPeriodRange(currentMonth).startDate, 'dd MMM', { locale: es })} - {format(getBillingPeriodRange(currentMonth).endDate, 'dd MMM', { locale: es })}
+              </div>
           </CardTitle>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -381,7 +382,7 @@ const HospedajeCalendar = ({
                             )}
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {customPeriodStart ? format(customPeriodStart, "dd/MM/yyyy") : "Seleccionar fecha"}
+                            {customPeriodStart ? format(customPeriodStart, "dd/MM/yyyy", { locale: es }) : "Seleccionar fecha"}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
@@ -409,7 +410,7 @@ const HospedajeCalendar = ({
                             )}
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {customPeriodEnd ? format(customPeriodEnd, "dd/MM/yyyy") : "Seleccionar fecha"}
+                            {customPeriodEnd ? format(customPeriodEnd, "dd/MM/yyyy", { locale: es }) : "Seleccionar fecha"}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
@@ -432,7 +433,7 @@ const HospedajeCalendar = ({
                       {useCustomPeriod ? 'Período Personalizado Activo' : 'Período Estándar (21-21)'}
                     </div>
                     <div>
-                      <strong>Rango:</strong> {format(getBillingPeriodRange(currentMonth).startDate, 'dd/MM/yyyy')} - {format(getBillingPeriodRange(currentMonth).endDate, 'dd/MM/yyyy')}
+                      <strong>Rango:</strong> {format(getBillingPeriodRange(currentMonth).startDate, 'dd/MM/yyyy', { locale: es })} - {format(getBillingPeriodRange(currentMonth).endDate, 'dd/MM/yyyy', { locale: es })}
                     </div>
                     <div>
                       <strong>Total días:</strong> {days.length} días
@@ -468,27 +469,6 @@ const HospedajeCalendar = ({
         </div>
       </CardHeader>
       <CardContent>
-        {/* Resumen financiero rápido */}
-        <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="font-medium">Total días hospedaje:</span>
-              <div className="text-lg font-bold">{financialSummary.totalWorkerDays}</div>
-            </div>
-            <div>
-              <span className="font-medium">Total neto:</span>
-              <div className="text-lg font-bold">{formatCurrency(financialSummary.netTotal)}</div>
-            </div>
-            <div>
-              <span className="font-medium">IVA (19%):</span>
-              <div className="text-lg font-bold">{formatCurrency(financialSummary.iva)}</div>
-            </div>
-            <div>
-              <span className="font-medium">Total a pagar:</span>
-              <div className="text-lg font-bold text-green-600">{formatCurrency(financialSummary.totalToPay)}</div>
-            </div>
-          </div>
-        </div>
 
         {/* Date Range Selector */}
         <div className="mb-4">
@@ -517,7 +497,7 @@ const HospedajeCalendar = ({
                         )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {startDate ? format(startDate, "dd/MM/yyyy") : "Seleccionar"}
+                        {startDate ? format(startDate, "dd/MM/yyyy", { locale: es }) : "Seleccionar"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -549,7 +529,7 @@ const HospedajeCalendar = ({
                         )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {endDate ? format(endDate, "dd/MM/yyyy") : "Seleccionar"}
+                        {endDate ? format(endDate, "dd/MM/yyyy", { locale: es }) : "Seleccionar"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -663,7 +643,7 @@ const HospedajeCalendar = ({
               {startDate && endDate && (
                 <div className="mt-3 p-2 bg-blue-100 rounded text-sm">
                   <strong>Rango seleccionado:</strong> {getDateRange().length} días 
-                  ({format(startDate, "dd/MM")} - {format(endDate, "dd/MM")})
+                  ({format(startDate, "dd/MM", { locale: es })} - {format(endDate, "dd/MM", { locale: es })})
                   {selectedWorkerIds.length > 0 && selectedWorkerIds.length < workers.length && (
                     <span> para {selectedWorkerIds.length} trabajador{selectedWorkerIds.length > 1 ? 'es' : ''} seleccionado{selectedWorkerIds.length > 1 ? 's' : ''}</span>
                   )}
@@ -760,6 +740,29 @@ const HospedajeCalendar = ({
               </tr>
             </tbody>
           </table>
+        </div>
+
+        {/* Resumen financiero */}
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+          <h3 className="text-lg font-semibold mb-4">Resumen Financiero</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="font-medium">Total días hospedaje:</span>
+              <div className="text-lg font-bold">{financialSummary.totalWorkerDays}</div>
+            </div>
+            <div>
+              <span className="font-medium">Total neto:</span>
+              <div className="text-lg font-bold">{formatCurrency(financialSummary.netTotal)}</div>
+            </div>
+            <div>
+              <span className="font-medium">IVA (19%):</span>
+              <div className="text-lg font-bold">{formatCurrency(financialSummary.iva)}</div>
+            </div>
+            <div>
+              <span className="font-medium">Total a pagar:</span>
+              <div className="text-lg font-bold text-green-600">{formatCurrency(financialSummary.totalToPay)}</div>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>
