@@ -391,6 +391,7 @@ const HospedajeCalendar = ({
                             selected={customPeriodStart}
                             onSelect={setCustomPeriodStart}
                             initialFocus
+                            locale={es}
                             className={cn("p-3 pointer-events-auto")}
                           />
                         </PopoverContent>
@@ -420,6 +421,7 @@ const HospedajeCalendar = ({
                             onSelect={setCustomPeriodEnd}
                             disabled={(date) => customPeriodStart && date <= customPeriodStart}
                             initialFocus
+                            locale={es}
                             className={cn("p-3 pointer-events-auto")}
                           />
                         </PopoverContent>
@@ -510,6 +512,7 @@ const HospedajeCalendar = ({
                           return date < periodStart || date > periodEnd;
                         }}
                         initialFocus
+                        locale={es}
                         className={cn("p-3 pointer-events-auto")}
                       />
                     </PopoverContent>
@@ -542,6 +545,7 @@ const HospedajeCalendar = ({
                           return date < periodStart || date > periodEnd || (startDate && date < startDate);
                         }}
                         initialFocus
+                        locale={es}
                         className={cn("p-3 pointer-events-auto")}
                       />
                     </PopoverContent>
