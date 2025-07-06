@@ -478,7 +478,7 @@ const HospedajeCalendar = ({
             className="flex items-center gap-2"
           >
             <CalendarIcon className="h-4 w-4" />
-            Seleccionar Rango de Fechas
+            Selección masiva
           </Button>
           
           {showRangeSelector && (
