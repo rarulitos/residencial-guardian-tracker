@@ -14,6 +14,89 @@ export type Database = {
   }
   public: {
     Tables: {
+      billing_periods: {
+        Row: {
+          created_at: string
+          id: string
+          month: number
+          name: string
+          updated_at: string
+          user_id: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: number
+          name: string
+          updated_at?: string
+          user_id: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: number
+          name?: string
+          updated_at?: string
+          user_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_periods_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      exported_reports: {
+        Row: {
+          billing_period_id: string
+          created_at: string
+          export_type: string
+          file_data: string | null
+          filename: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          billing_period_id: string
+          created_at?: string
+          export_type: string
+          file_data?: string | null
+          filename: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          billing_period_id?: string
+          created_at?: string
+          export_type?: string
+          file_data?: string | null
+          filename?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exported_reports_billing_period_id_fkey"
+            columns: ["billing_period_id"]
+            isOneToOne: false
+            referencedRelation: "billing_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exported_reports_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -40,6 +123,86 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      worker_hospedaje: {
+        Row: {
+          created_at: string
+          date: string
+          has_hospedaje: boolean
+          id: string
+          updated_at: string
+          worker_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          has_hospedaje?: boolean
+          id?: string
+          updated_at?: string
+          worker_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          has_hospedaje?: boolean
+          id?: string
+          updated_at?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "worker_hospedaje_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workers: {
+        Row: {
+          billing_period_id: string
+          created_at: string
+          id: string
+          name: string
+          position: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          billing_period_id: string
+          created_at?: string
+          id?: string
+          name: string
+          position: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          billing_period_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          position?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workers_billing_period_id_fkey"
+            columns: ["billing_period_id"]
+            isOneToOne: false
+            referencedRelation: "billing_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
     }
     Views: {

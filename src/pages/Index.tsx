@@ -1,66 +1,63 @@
-import React, { useState } from 'react';
-import { Worker, MonthlyWorkers } from '@/types/worker';
+import React, { useState, useEffect } from 'react';
+import { WorkerWithHospedaje, BillingPeriod } from '@/types/database';
 import WorkerForm from '@/components/WorkerForm';
 import HospedajeCalendar from '@/components/HospedajeCalendar';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDatabase } from '@/hooks/useDatabase';
 
 const Index = () => {
   const { user, signOut } = useAuth();
-  const [monthlyWorkers, setMonthlyWorkers] = useState<MonthlyWorkers>({});
+  const { createOrGetBillingPeriod, getWorkersForPeriod, addWorker, deleteWorker, toggleHospedaje, loading } = useDatabase();
+  const [currentPeriod, setCurrentPeriod] = useState<BillingPeriod | null>(null);
+  const [workers, setWorkers] = useState<WorkerWithHospedaje[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  const getBillingPeriodKey = (date: Date) => {
-    return `${date.getFullYear()}-${date.getMonth()}`;
-  };
-
-  const getCurrentPeriodWorkers = () => {
-    const periodKey = getBillingPeriodKey(currentMonth);
-    return monthlyWorkers[periodKey] || [];
-  };
-
-  const addWorker = (name: string, position: string) => {
-    const periodKey = getBillingPeriodKey(currentMonth);
-    const newWorker: Worker = {
-      id: Date.now().toString(),
-      name,
-      position,
-      hospedaje: {},
-      monthYear: periodKey
+  // Load current period and workers when month changes
+  useEffect(() => {
+    const loadPeriodData = async () => {
+      const period = await createOrGetBillingPeriod(currentMonth.getFullYear(), currentMonth.getMonth());
+      setCurrentPeriod(period);
+      
+      if (period) {
+        const periodWorkers = await getWorkersForPeriod(period.id);
+        setWorkers(periodWorkers);
+      }
     };
-    
-    setMonthlyWorkers(prev => ({
-      ...prev,
-      [periodKey]: [...(prev[periodKey] || []), newWorker]
-    }));
+
+    if (user) {
+      loadPeriodData();
+    }
+  }, [currentMonth, user, createOrGetBillingPeriod, getWorkersForPeriod]);
+
+  const handleAddWorker = async (name: string, position: string) => {
+    if (!currentPeriod) return;
+
+    const newWorker = await addWorker(currentPeriod.id, name, position);
+    if (newWorker) {
+      // Reload workers to get updated data
+      const updatedWorkers = await getWorkersForPeriod(currentPeriod.id);
+      setWorkers(updatedWorkers);
+    }
   };
 
-  const deleteWorker = (workerId: string) => {
-    const periodKey = getBillingPeriodKey(currentMonth);
-    setMonthlyWorkers(prev => ({
-      ...prev,
-      [periodKey]: (prev[periodKey] || []).filter(worker => worker.id !== workerId)
-    }));
+  const handleDeleteWorker = async (workerId: string) => {
+    const success = await deleteWorker(workerId);
+    if (success && currentPeriod) {
+      // Reload workers to get updated data
+      const updatedWorkers = await getWorkersForPeriod(currentPeriod.id);
+      setWorkers(updatedWorkers);
+    }
   };
 
-  const toggleHospedaje = (workerId: string, date: string) => {
-    const periodKey = getBillingPeriodKey(currentMonth);
-    setMonthlyWorkers(prev => ({
-      ...prev,
-      [periodKey]: (prev[periodKey] || []).map(worker => {
-        if (worker.id === workerId) {
-          return {
-            ...worker,
-            hospedaje: {
-              ...worker.hospedaje,
-              [date]: !worker.hospedaje[date]
-            }
-          };
-        }
-        return worker;
-      })
-    }));
+  const handleToggleHospedaje = async (workerId: string, date: string) => {
+    const success = await toggleHospedaje(workerId, date);
+    if (success && currentPeriod) {
+      // Reload workers to get updated data
+      const updatedWorkers = await getWorkersForPeriod(currentPeriod.id);
+      setWorkers(updatedWorkers);
+    }
   };
 
   const changeMonth = (direction: 'prev' | 'next') => {
@@ -80,7 +77,17 @@ const Index = () => {
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
 
-  const currentWorkers = getCurrentPeriodWorkers();
+  // Convert database workers to the format expected by the calendar
+  const currentWorkers = workers.map(worker => ({
+    id: worker.id,
+    name: worker.name,
+    position: worker.position,
+    hospedaje: worker.hospedaje.reduce((acc, h) => {
+      acc[h.date] = h.has_hospedaje;
+      return acc;
+    }, {} as { [date: string]: boolean }),
+    monthYear: `${currentMonth.getFullYear()}-${currentMonth.getMonth()}`
+  }));
 
   const handleSignOut = async () => {
     await signOut();
@@ -109,7 +116,7 @@ const Index = () => {
           </p>
         </div>
 
-        <WorkerForm onAddWorker={addWorker} />
+        <WorkerForm onAddWorker={handleAddWorker} />
 
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -138,7 +145,12 @@ const Index = () => {
           </div>
         </div>
 
-        {currentWorkers.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <p className="text-gray-500 mt-2">Cargando datos...</p>
+          </div>
+        ) : currentWorkers.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
             <p className="text-gray-500 text-lg">
               No hay trabajadores agregados para este período
@@ -152,8 +164,8 @@ const Index = () => {
             <HospedajeCalendar
               workers={currentWorkers}
               currentMonth={currentMonth}
-              onToggleHospedaje={toggleHospedaje}
-              onDeleteWorker={deleteWorker}
+              onToggleHospedaje={handleToggleHospedaje}
+              onDeleteWorker={handleDeleteWorker}
             />
             
           </>
