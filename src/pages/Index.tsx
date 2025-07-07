@@ -3,9 +3,11 @@ import { Worker, MonthlyWorkers } from '@/types/worker';
 import WorkerForm from '@/components/WorkerForm';
 import HospedajeCalendar from '@/components/HospedajeCalendar';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Index = () => {
+  const { user, signOut } = useAuth();
   const [monthlyWorkers, setMonthlyWorkers] = useState<MonthlyWorkers>({});
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -80,13 +82,28 @@ const Index = () => {
 
   const currentWorkers = getCurrentPeriodWorkers();
 
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Control de Hospedaje de Trabajadores
-          </h1>
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                Control de Hospedaje de Trabajadores
+              </h1>
+              <p className="text-gray-600">
+                Bienvenido, {user?.email}
+              </p>
+            </div>
+            <Button onClick={handleSignOut} variant="outline" className="flex items-center gap-2">
+              <LogOut className="h-4 w-4" />
+              Cerrar Sesión
+            </Button>
+          </div>
           <p className="text-gray-600">
             Gestiona el hospedaje diario de trabajadores de forma individual y flexible
           </p>
