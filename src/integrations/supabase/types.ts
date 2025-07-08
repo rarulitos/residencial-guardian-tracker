@@ -42,15 +42,7 @@ export type Database = {
           user_id?: string
           year?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "billing_periods_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       exported_reports: {
         Row: {
@@ -87,13 +79,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "billing_periods"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "exported_reports_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -194,13 +179,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "billing_periods"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workers_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
           },
         ]
       }
