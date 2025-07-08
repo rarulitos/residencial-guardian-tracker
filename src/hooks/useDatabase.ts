@@ -8,7 +8,12 @@ export const useDatabase = () => {
   const [loading, setLoading] = useState(false);
 
   const createOrGetBillingPeriod = async (year: number, month: number): Promise<BillingPeriod | null> => {
-    if (!user) return null;
+    if (!user) {
+      console.log('No user found');
+      return null;
+    }
+    
+    console.log('Creating/getting billing period for user:', user.id, 'year:', year, 'month:', month);
     
     const monthNames = [
       'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -16,7 +21,10 @@ export const useDatabase = () => {
     ];
     
     try {
+      setLoading(true);
+      
       // First try to get existing period
+      console.log('Searching for existing period...');
       const { data: existing, error: fetchError } = await supabase
         .from('billing_periods')
         .select('*')
@@ -25,11 +33,18 @@ export const useDatabase = () => {
         .eq('month', month)
         .maybeSingle();
 
-      if (existing && !fetchError) {
+      if (fetchError) {
+        console.error('Error fetching existing period:', fetchError);
+        throw fetchError;
+      }
+
+      if (existing) {
+        console.log('Found existing period:', existing);
         return existing;
       }
 
       // Create new period if it doesn't exist
+      console.log('Creating new period...');
       const { data, error } = await supabase
         .from('billing_periods')
         .insert({
@@ -41,11 +56,18 @@ export const useDatabase = () => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating period:', error);
+        throw error;
+      }
+      
+      console.log('Created new period:', data);
       return data;
     } catch (error) {
       console.error('Error creating/getting billing period:', error);
       return null;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -86,7 +108,12 @@ export const useDatabase = () => {
   };
 
   const addWorker = async (billingPeriodId: string, name: string, position: string): Promise<Worker | null> => {
-    if (!user) return null;
+    if (!user) {
+      console.log('No user found for addWorker');
+      return null;
+    }
+
+    console.log('Adding worker:', { billingPeriodId, name, position, userId: user.id });
 
     try {
       const { data, error } = await supabase
@@ -100,7 +127,12 @@ export const useDatabase = () => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error inserting worker:', error);
+        throw error;
+      }
+      
+      console.log('Worker inserted successfully:', data);
       return data;
     } catch (error) {
       console.error('Error adding worker:', error);

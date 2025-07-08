@@ -32,12 +32,21 @@ const Index = () => {
   }, [currentMonth, user, createOrGetBillingPeriod, getWorkersForPeriod]);
 
   const handleAddWorker = async (name: string, position: string) => {
-    if (!currentPeriod) return;
+    console.log('handleAddWorker called with:', { name, position, currentPeriod });
+    if (!currentPeriod) {
+      console.log('No current period available');
+      return;
+    }
 
+    console.log('Adding worker to period:', currentPeriod.id);
     const newWorker = await addWorker(currentPeriod.id, name, position);
+    console.log('Worker added result:', newWorker);
+    
     if (newWorker) {
+      console.log('Reloading workers for period:', currentPeriod.id);
       // Reload workers to get updated data
       const updatedWorkers = await getWorkersForPeriod(currentPeriod.id);
+      console.log('Updated workers:', updatedWorkers);
       setWorkers(updatedWorkers);
     }
   };
