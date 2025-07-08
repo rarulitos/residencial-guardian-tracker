@@ -23,7 +23,7 @@ export const useDatabase = () => {
         .eq('user_id', user.id)
         .eq('year', year)
         .eq('month', month)
-        .single();
+        .maybeSingle();
 
       if (existing && !fetchError) {
         return existing;
@@ -131,7 +131,7 @@ export const useDatabase = () => {
         .select('*')
         .eq('worker_id', workerId)
         .eq('date', date)
-        .single();
+        .maybeSingle();
 
       if (existing && !fetchError) {
         // Update existing record
