@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Worker } from '@/types/worker';
+import { WorkerWithHospedaje } from '@/types/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,8 +16,17 @@ import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 
+// Define the interface for the transformed worker data that matches what Index.tsx passes
+interface CalendarWorker {
+  id: string;
+  name: string;
+  position: string;
+  hospedaje: { [date: string]: boolean };
+  monthYear: string;
+}
+
 interface HospedajeCalendarProps {
-  workers: Worker[];
+  workers: CalendarWorker[];
   currentMonth: Date;
   onToggleHospedaje: (workerId: string, date: string) => void;
   onDeleteWorker: (workerId: string) => void;

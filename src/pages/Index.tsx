@@ -14,21 +14,26 @@ const Index = () => {
   const [workers, setWorkers] = useState<WorkerWithHospedaje[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  // Load current period and workers when month changes
+  // Load current period and workers when month changes or user changes
   useEffect(() => {
     const loadPeriodData = async () => {
+      if (!user) return;
+      
+      console.log('Loading period data for:', currentMonth.getFullYear(), currentMonth.getMonth());
       const period = await createOrGetBillingPeriod(currentMonth.getFullYear(), currentMonth.getMonth());
       setCurrentPeriod(period);
       
       if (period) {
+        console.log('Loading workers for period:', period.id);
         const periodWorkers = await getWorkersForPeriod(period.id);
+        console.log('Workers loaded:', periodWorkers);
         setWorkers(periodWorkers);
+      } else {
+        setWorkers([]);
       }
     };
 
-    if (user) {
-      loadPeriodData();
-    }
+    loadPeriodData();
   }, [currentMonth, user, createOrGetBillingPeriod, getWorkersForPeriod]);
 
   const handleAddWorker = async (name: string, position: string) => {

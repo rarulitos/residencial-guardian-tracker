@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { BillingPeriod, Worker, WorkerHospedaje, WorkerWithHospedaje } from '@/types/database';
@@ -7,7 +7,7 @@ export const useDatabase = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  const createOrGetBillingPeriod = async (year: number, month: number): Promise<BillingPeriod | null> => {
+  const createOrGetBillingPeriod = useCallback(async (year: number, month: number): Promise<BillingPeriod | null> => {
     if (!user) {
       console.log('No user found');
       return null;
@@ -69,9 +69,9 @@ export const useDatabase = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  const getWorkersForPeriod = async (billingPeriodId: string): Promise<WorkerWithHospedaje[]> => {
+  const getWorkersForPeriod = useCallback(async (billingPeriodId: string): Promise<WorkerWithHospedaje[]> => {
     if (!user) return [];
     
     try {
@@ -105,9 +105,9 @@ export const useDatabase = () => {
       console.error('Error getting workers for period:', error);
       return [];
     }
-  };
+  }, [user]);
 
-  const addWorker = async (billingPeriodId: string, name: string, position: string): Promise<Worker | null> => {
+  const addWorker = useCallback(async (billingPeriodId: string, name: string, position: string): Promise<Worker | null> => {
     if (!user) {
       console.log('No user found for addWorker');
       return null;
@@ -138,9 +138,9 @@ export const useDatabase = () => {
       console.error('Error adding worker:', error);
       return null;
     }
-  };
+  }, [user]);
 
-  const deleteWorker = async (workerId: string): Promise<boolean> => {
+  const deleteWorker = useCallback(async (workerId: string): Promise<boolean> => {
     try {
       const { error } = await supabase
         .from('workers')
@@ -153,9 +153,9 @@ export const useDatabase = () => {
       console.error('Error deleting worker:', error);
       return false;
     }
-  };
+  }, []);
 
-  const toggleHospedaje = async (workerId: string, date: string): Promise<boolean> => {
+  const toggleHospedaje = useCallback(async (workerId: string, date: string): Promise<boolean> => {
     try {
       // First check if record exists
       const { data: existing, error: fetchError } = await supabase
@@ -191,7 +191,7 @@ export const useDatabase = () => {
       console.error('Error toggling hospedaje:', error);
       return false;
     }
-  };
+  }, []);
 
   return {
     loading,
