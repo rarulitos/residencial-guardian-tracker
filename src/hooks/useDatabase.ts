@@ -116,13 +116,54 @@ export const useDatabase = () => {
     console.log('Adding worker:', { billingPeriodId, name, position, userId: user.id });
 
     try {
+      // Step 1: Find if a canonical version of this worker exists for the user (case-insensitive search)
+      const { data: canonicalWorker, error: fetchError } = await supabase
+        .from('workers')
+        .select('name, position')
+        .eq('user_id', user.id)
+        .ilike('name', name)
+        .ilike('position', position)
+        .limit(1)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Error fetching canonical worker:', fetchError);
+        throw fetchError;
+      }
+
+      // Step 2: Determine the canonical name and position to use for consistency
+      const canonicalName = canonicalWorker ? canonicalWorker.name : name;
+      const canonicalPosition = canonicalWorker ? canonicalWorker.position : position;
+
+      // Step 3: Check if this worker already exists in the *current* billing period
+      const { data: workerInPeriod, error: periodFetchError } = await supabase
+        .from('workers')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('billing_period_id', billingPeriodId)
+        .eq('name', canonicalName)
+        .eq('position', canonicalPosition)
+        .maybeSingle();
+
+      if (periodFetchError) {
+        console.error('Error fetching worker in current period:', periodFetchError);
+        throw periodFetchError;
+      }
+
+      if (workerInPeriod) {
+        console.log('Worker already exists in this billing period:', workerInPeriod);
+        return workerInPeriod;
+      }
+
+      // Step 4: If the worker does not exist in the current period, insert them.
+      // This uses the canonical name/position to ensure consistency across periods.
       const { data, error } = await supabase
         .from('workers')
         .insert({
           user_id: user.id,
           billing_period_id: billingPeriodId,
-          name,
-          position
+          name: canonicalName,
+          position: canonicalPosition
         })
         .select()
         .single();
@@ -132,7 +173,7 @@ export const useDatabase = () => {
         throw error;
       }
       
-      console.log('Worker inserted successfully:', data);
+      console.log('Worker inserted successfully for the new period:', data);
       return data;
     } catch (error) {
       console.error('Error adding worker:', error);

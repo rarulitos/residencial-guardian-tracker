@@ -66,12 +66,45 @@ const Index = () => {
   };
 
   const handleToggleHospedaje = async (workerId: string, date: string) => {
-    const success = await toggleHospedaje(workerId, date);
-    if (success && currentPeriod) {
-      // Reload workers to get updated data
-      const updatedWorkers = await getWorkersForPeriod(currentPeriod.id);
-      setWorkers(updatedWorkers);
-    }
+    // Optimistic update
+    setWorkers(prevWorkers =>
+      prevWorkers.map(worker => {
+        if (worker.id === workerId) {
+          const newHospedaje = [...worker.hospedaje];
+          const hospedajeIndex = newHospedaje.findIndex(h => h.date === date);
+
+          if (hospedajeIndex > -1) {
+            // Update existing hospedaje record
+            newHospedaje[hospedajeIndex] = {
+              ...newHospedaje[hospedajeIndex],
+              has_hospedaje: !newHospedaje[hospedajeIndex].has_hospedaje
+            };
+          } else {
+            // Create new hospedaje record
+            newHospedaje.push({
+              id: `temp-${Date.now()}`,
+              worker_id: workerId,
+              date,
+              has_hospedaje: true
+            });
+          }
+
+          return { ...worker, hospedaje: newHospedaje };
+        }
+        return worker;
+      })
+    );
+
+    // Call the database function without awaiting it for faster UI response
+    toggleHospedaje(workerId, date).catch(error => {
+      // If the database update fails, revert the state and show an error
+      console.error("Failed to update hospedaje:", error);
+      // Optionally, you can add a toast notification to inform the user
+      // And revert the state to the previous version
+      if (currentPeriod) {
+        getWorkersForPeriod(currentPeriod.id).then(setWorkers);
+      }
+    });
   };
 
   const changeMonth = (direction: 'prev' | 'next') => {
