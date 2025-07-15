@@ -254,7 +254,7 @@ const HospedajeCalendar = ({
     excelData.push(['RESUMEN FINANCIERO']);
     excelData.push([]);
     excelData.push(['Concepto', 'Valor']);
-    excelData.push(['Total de hospedajes', financialSummary.totalWorkerDays]);
+    excelData.push(['Me gusta', financialSummary.totalWorkerDays]);
     excelData.push(['Precio unitario por alojamiento', formatCurrency(financialSummary.unitPrice)]);
     excelData.push(['Total neto (sin IVA)', formatCurrency(financialSummary.netTotal)]);
     excelData.push(['IVA (19%)', formatCurrency(financialSummary.iva)]);
