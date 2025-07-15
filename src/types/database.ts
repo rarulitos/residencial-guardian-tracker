@@ -193,3 +193,7 @@ export type WorkerHospedaje = Tables<"worker_hospedaje">;
 export type WorkerWithHospedaje = Worker & {
   hospedaje: WorkerHospedaje[];
 };
+
+export type GroupWithWorkers = Group & {
+  workers: WorkerWithHospedaje[];
+};

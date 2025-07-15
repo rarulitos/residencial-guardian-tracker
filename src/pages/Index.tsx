@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BillingPeriod, Group } from '@/types/database';
+import { BillingPeriod, Group, GroupWithWorkers } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, LogOut, PlusCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,7 +34,7 @@ const Index = () => {
   const { user, signOut } = useAuth();
   const { createOrGetBillingPeriod, getGroupsForPeriod, createGroup, updateGroup, loading } = useDatabase();
   const [currentPeriod, setCurrentPeriod] = useState<BillingPeriod | null>(null);
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [groups, setGroups] = useState<GroupWithWorkers[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isNewGroupDialogOpen, setIsNewGroupDialogOpen] = useState(false);
   const [isEditGroupDialogOpen, setIsEditGroupDialogOpen] = useState(false);
@@ -54,6 +54,32 @@ const Index = () => {
       endDate: new Date(),
     },
   });
+
+  const calculateTotalForGroup = (group: GroupWithWorkers) => {
+    const unitPrice = 25000; // Asumiendo el precio fijo
+    
+    const groupStartDate = parseDateString(group.start_date);
+    const groupEndDate = parseDateString(group.end_date);
+
+    const totalWorkerDays = group.workers.reduce((total, worker) => {
+      const validHospedajeDays = worker.worker_hospedaje.filter(h => {
+        if (!h.has_hospedaje) return false;
+        const hospedajeDate = parseDateString(h.date);
+        return hospedajeDate >= groupStartDate && hospedajeDate <= groupEndDate;
+      }).length;
+      return total + validHospedajeDays;
+    }, 0);
+
+    const netTotal = totalWorkerDays * unitPrice;
+    const iva = netTotal * 0.19;
+    const totalToPay = netTotal + iva;
+
+    return new Intl.NumberFormat('es-CL', {
+      style: 'currency',
+      currency: 'CLP',
+      minimumFractionDigits: 0
+    }).format(totalToPay);
+  };
 
   useEffect(() => {
     const loadPeriodData = async () => {
@@ -206,12 +232,15 @@ const Index = () => {
                       <p className="text-sm text-gray-500">
                         {format(parseDateString(group.start_date), 'dd/MM/yyyy')} - {format(parseDateString(group.end_date), 'dd/MM/yyyy')}
                       </p>
+                      <p className="text-sm font-semibold text-green-600 mt-1">
+                        Total a Pagar: {calculateTotalForGroup(group)}
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button variant="outline" onClick={() => handleEditClick(group)}>Editar</Button>
                       <Link to={`/groups/${group.id}`}>
                         <Button variant="outline">Ver Detalles</Button>
                       </Link>
-                      <Button variant="secondary" onClick={() => handleEditClick(group)}>Editar</Button>
                     </div>
                   </div>
                 ))}

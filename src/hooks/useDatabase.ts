@@ -61,17 +61,26 @@ export const useDatabase = () => {
     }
   }, [user]);
 
-  const getGroupsForPeriod = useCallback(async (billingPeriodId: string): Promise<Group[]> => {
+  const getGroupsForPeriod = useCallback(async (billingPeriodId: string): Promise<GroupWithWorkers[]> => {
     if (!user) return [];
     try {
       const { data: groups, error } = await supabase
         .from('groups')
-        .select('*')
+        .select(`
+          *,
+          workers (
+            *,
+            worker_hospedaje (*)
+          )
+        `)
         .eq('billing_period_id', billingPeriodId)
         .eq('user_id', user.id);
 
       if (error) throw error;
-      return groups || [];
+      
+      // The type from Supabase should be compatible with GroupWithWorkers
+      // but we cast it to ensure type safety in the rest of the app.
+      return (groups as any) || [];
     } catch (error) {
       console.error('Error getting groups for period:', error);
       return [];
