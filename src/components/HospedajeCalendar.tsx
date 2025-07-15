@@ -230,7 +230,7 @@ const HospedajeCalendar = ({
         worker.position,
         ...days.map(dayData => {
           const dateStr = formatDateFromDayData(dayData);
-          return worker.hospedaje[dateStr] ? 'X' : '';
+          return worker.hospedaje[dateStr] ? '✓' : '';
         }),
         workerTotal
       ];
@@ -254,7 +254,7 @@ const HospedajeCalendar = ({
     excelData.push(['RESUMEN FINANCIERO']);
     excelData.push([]);
     excelData.push(['Concepto', 'Valor']);
-    excelData.push(['Total de trabajadores hospedados (días)', financialSummary.totalWorkerDays]);
+    excelData.push(['Total de hospedajes', financialSummary.totalWorkerDays]);
     excelData.push(['Precio unitario por alojamiento', formatCurrency(financialSummary.unitPrice)]);
     excelData.push(['Total neto (sin IVA)', formatCurrency(financialSummary.netTotal)]);
     excelData.push(['IVA (19%)', formatCurrency(financialSummary.iva)]);
