@@ -3,6 +3,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { BillingPeriod, Worker, Group, WorkerHospedaje, WorkerWithHospedaje } from '@/types/database';
 
+// Helper to format a Date object to 'YYYY-MM-DD' in the local timezone
+const toYYYYMMDD = (date: Date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
+
 export const useDatabase = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -13,8 +21,6 @@ export const useDatabase = () => {
       return null;
     }
     
-    console.log('Creating/getting billing period for user:', user.id, 'year:', year, 'month:', month);
-    
     const monthNames = [
       'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
       'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
@@ -23,8 +29,6 @@ export const useDatabase = () => {
     try {
       setLoading(true);
       
-      // First try to get existing period
-      console.log('Searching for existing period...');
       const { data: existing, error: fetchError } = await supabase
         .from('billing_periods')
         .select('*')
@@ -33,18 +37,9 @@ export const useDatabase = () => {
         .eq('month', month)
         .maybeSingle();
 
-      if (fetchError) {
-        console.error('Error fetching existing period:', fetchError);
-        throw fetchError;
-      }
+      if (fetchError) throw fetchError;
+      if (existing) return existing;
 
-      if (existing) {
-        console.log('Found existing period:', existing);
-        return existing;
-      }
-
-      // Create new period if it doesn't exist
-      console.log('Creating new period...');
       const { data, error } = await supabase
         .from('billing_periods')
         .insert({
@@ -56,12 +51,7 @@ export const useDatabase = () => {
         .select()
         .single();
 
-      if (error) {
-        console.error('Error creating period:', error);
-        throw error;
-      }
-      
-      console.log('Created new period:', data);
+      if (error) throw error;
       return data;
     } catch (error) {
       console.error('Error creating/getting billing period:', error);
@@ -73,7 +63,6 @@ export const useDatabase = () => {
 
   const getGroupsForPeriod = useCallback(async (billingPeriodId: string): Promise<Group[]> => {
     if (!user) return [];
-
     try {
       const { data: groups, error } = await supabase
         .from('groups')
@@ -91,7 +80,6 @@ export const useDatabase = () => {
 
   const getGroupById = useCallback(async (groupId: string): Promise<Group | null> => {
     if (!user) return null;
-
     try {
       const { data: group, error } = await supabase
         .from('groups')
@@ -109,11 +97,7 @@ export const useDatabase = () => {
   }, [user]);
 
   const createGroup = useCallback(async (billingPeriodId: string, name: string, startDate: Date, endDate: Date): Promise<Group | null> => {
-    if (!user) {
-      console.log('No user found for createGroup');
-      return null;
-    }
-
+    if (!user) return null;
     try {
       const { data, error } = await supabase
         .from('groups')
@@ -121,8 +105,8 @@ export const useDatabase = () => {
           user_id: user.id,
           billing_period_id: billingPeriodId,
           name,
-          start_date: startDate.toISOString().split('T')[0],
-          end_date: endDate.toISOString().split('T')[0],
+          start_date: toYYYYMMDD(startDate),
+          end_date: toYYYYMMDD(endDate),
         })
         .select()
         .single();
@@ -135,9 +119,31 @@ export const useDatabase = () => {
     }
   }, [user]);
 
+  const updateGroup = useCallback(async (groupId: string, name: string, startDate: Date, endDate: Date): Promise<Group | null> => {
+    if (!user) return null;
+    try {
+      const { data, error } = await supabase
+        .from('groups')
+        .update({
+          name,
+          start_date: toYYYYMMDD(startDate),
+          end_date: toYYYYMMDD(endDate),
+        })
+        .eq('id', groupId)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error updating group:', error);
+      return null;
+    }
+  }, [user]);
+
   const getWorkersForGroup = useCallback(async (groupId: string): Promise<WorkerWithHospedaje[]> => {
     if (!user) return [];
-    
     try {
       const { data: workers, error: workersError } = await supabase
         .from('workers')
@@ -147,7 +153,6 @@ export const useDatabase = () => {
 
       if (workersError) throw workersError;
 
-      // Get hospedaje data for all workers
       const workersWithHospedaje: WorkerWithHospedaje[] = await Promise.all(
         (workers || []).map(async (worker) => {
           const { data: hospedaje, error: hospedajeError } = await supabase
@@ -172,85 +177,31 @@ export const useDatabase = () => {
   }, [user]);
 
   const addWorker = useCallback(async (groupId: string, name: string, position: string): Promise<Worker | null> => {
-    if (!user) {
-      console.log('No user found for addWorker');
-      return null;
-    }
-
-    console.log('Adding worker:', { groupId, name, position, userId: user.id });
-
+    if (!user) return null;
     try {
-      // Get the group to infer billing_period_id
-      const { data: group, error: groupError } = await supabase
-        .from('groups')
-        .select('billing_period_id')
-        .eq('id', groupId)
-        .single();
+      const { data: group } = await supabase.from('groups').select('billing_period_id').eq('id', groupId).single();
+      if (!group) throw new Error("Group not found");
 
-      if (groupError) {
-        console.error('Error fetching group for addWorker:', groupError);
-        throw groupError;
-      }
-
-      // Step 1: Find if a canonical version of this worker exists for the user (case-insensitive search)
-      const { data: canonicalWorker, error: fetchError } = await supabase
-        .from('workers')
-        .select('name, position')
-        .eq('user_id', user.id)
-        .ilike('name', name)
-        .ilike('position', position)
-        .limit(1)
-        .maybeSingle();
-
-      if (fetchError) {
-        console.error('Error fetching canonical worker:', fetchError);
-        throw fetchError;
-      }
-
-      // Step 2: Determine the canonical name and position to use for consistency
+      const { data: canonicalWorker } = await supabase.from('workers').select('name, position').eq('user_id', user.id).ilike('name', name).ilike('position', position).limit(1).maybeSingle();
       const canonicalName = canonicalWorker ? canonicalWorker.name : name;
       const canonicalPosition = canonicalWorker ? canonicalWorker.position : position;
 
-      // Step 3: Check if this worker already exists in the *current* group
-      const { data: workerInGroup, error: groupFetchError } = await supabase
-        .from('workers')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('group_id', groupId)
-        .eq('name', canonicalName)
-        .eq('position', canonicalPosition)
-        .maybeSingle();
+      const { data: workerInGroup } = await supabase.from('workers').select('*').eq('user_id', user.id).eq('group_id', groupId).eq('name', canonicalName).eq('position', canonicalPosition).maybeSingle();
+      if (workerInGroup) return workerInGroup;
 
-      if (groupFetchError) {
-        console.error('Error fetching worker in current group:', groupFetchError);
-        throw groupFetchError;
-      }
-
-      if (workerInGroup) {
-        console.log('Worker already exists in this group:', workerInGroup);
-        return workerInGroup;
-      }
-
-      // Step 4: If the worker does not exist in the current group, insert them.
-      // This uses the canonical name/position to ensure consistency across periods.
       const { data, error } = await supabase
         .from('workers')
         .insert({
           user_id: user.id,
           group_id: groupId,
-          billing_period_id: group.billing_period_id, // Infer from group
+          billing_period_id: group.billing_period_id,
           name: canonicalName,
           position: canonicalPosition
         })
         .select()
         .single();
 
-      if (error) {
-        console.error('Error inserting worker:', error);
-        throw error;
-      }
-      
-      console.log('Worker inserted successfully for the new group:', data);
+      if (error) throw error;
       return data;
     } catch (error) {
       console.error('Error adding worker:', error);
@@ -260,11 +211,7 @@ export const useDatabase = () => {
 
   const deleteWorker = useCallback(async (workerId: string): Promise<boolean> => {
     try {
-      const { error } = await supabase
-        .from('workers')
-        .delete()
-        .eq('id', workerId);
-
+      const { error } = await supabase.from('workers').delete().eq('id', workerId);
       if (error) throw error;
       return true;
     } catch (error) {
@@ -274,54 +221,19 @@ export const useDatabase = () => {
   }, []);
 
   const toggleHospedaje = useCallback(async (workerId: string, date: string): Promise<boolean> => {
-    console.log('toggleHospedaje called for:', workerId, date);
     try {
-      // First check if record exists
-      const { data: existing, error: fetchError } = await supabase
-        .from('worker_hospedaje')
-        .select('*')
-        .eq('worker_id', workerId)
-        .eq('date', date)
-        .maybeSingle();
-
-      if (fetchError) {
-        console.error('Error fetching existing hospedaje record:', fetchError);
-        return false;
-      }
-      console.log('Existing hospedaje record:', existing);
+      const { data: existing } = await supabase.from('worker_hospedaje').select('*').eq('worker_id', workerId).eq('date', date).maybeSingle();
 
       if (existing) {
-        // Update existing record
-        const { error: updateError } = await supabase
-          .from('worker_hospedaje')
-          .update({ has_hospedaje: !existing.has_hospedaje })
-          .eq('id', existing.id);
-
-        if (updateError) {
-          console.error('Error updating hospedaje record:', updateError);
-          return false;
-        }
-        console.log('Hospedaje record updated.');
+        const { error } = await supabase.from('worker_hospedaje').update({ has_hospedaje: !existing.has_hospedaje }).eq('id', existing.id);
+        if (error) return false;
       } else {
-        // Create new record
-        const { error: insertError } = await supabase
-          .from('worker_hospedaje')
-          .insert({
-            worker_id: workerId,
-            date,
-            has_hospedaje: true
-          });
-
-        if (insertError) {
-          console.error('Error inserting new hospedaje record:', insertError);
-          return false;
-        }
-        console.log('New hospedaje record inserted.');
+        const { error } = await supabase.from('worker_hospedaje').insert({ worker_id: workerId, date, has_hospedaje: true });
+        if (error) return false;
       }
-
       return true;
     } catch (error) {
-      console.error('Error toggling hospedaje (general catch):', error);
+      console.error('Error toggling hospedaje:', error);
       return false;
     }
   }, []);
@@ -332,6 +244,7 @@ export const useDatabase = () => {
     getGroupsForPeriod,
     getGroupById,
     createGroup,
+    updateGroup,
     getWorkersForGroup,
     addWorker,
     deleteWorker,

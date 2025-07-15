@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import WorkerForm from '@/components/WorkerForm';
 import HospedajeCalendar from '@/components/HospedajeCalendar';
 import { format } from 'date-fns';
+import { parseDateString } from '@/lib/utils';
 
 const GroupDetail = () => {
   const { groupId } = useParams<{ groupId: string }>();
@@ -51,7 +52,6 @@ const GroupDetail = () => {
   };
 
   const handleToggleHospedaje = async (workerId: string, date: string) => {
-    console.log('handleToggleHospedaje called for:', workerId, date);
     // Optimistic update
     setWorkers(prevWorkers =>
       prevWorkers.map(worker => {
@@ -116,9 +116,10 @@ const GroupDetail = () => {
     );
   }
 
-  const currentMonth = new Date(group.start_date); // Use start_date to determine the month for calendar display
+  const startDate = parseDateString(group.start_date);
+  const endDate = parseDateString(group.end_date);
+  const currentMonth = startDate;
 
-  console.log('Workers state before transformation:', workers);
   const currentWorkersForCalendar = workers.map(worker => ({
     id: worker.id,
     name: worker.name,
@@ -128,7 +129,6 @@ const GroupDetail = () => {
       return acc;
     }, {} as { [date: string]: boolean }),
   }));
-  console.log('Transformed workers for calendar:', currentWorkersForCalendar);
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -160,7 +160,7 @@ const GroupDetail = () => {
           <div>
             <h2 className="text-xl font-semibold">Agrupación: {group.name}</h2>
             <p className="text-gray-600 text-sm">
-              Período: {format(new Date(group.start_date), 'dd/MM/yyyy')} - {format(new Date(group.end_date), 'dd/MM/yyyy')}
+              Período: {format(startDate, 'dd/MM/yyyy')} - {format(endDate, 'dd/MM/yyyy')}
             </p>
           </div>
         </div>
@@ -180,8 +180,8 @@ const GroupDetail = () => {
           <HospedajeCalendar
             workers={currentWorkersForCalendar}
             currentMonth={currentMonth}
-            startDate={new Date(group.start_date)}
-            endDate={new Date(group.end_date)}
+            startDate={startDate}
+            endDate={endDate}
             onToggleHospedaje={handleToggleHospedaje}
             onDeleteWorker={handleDeleteWorker}
           />

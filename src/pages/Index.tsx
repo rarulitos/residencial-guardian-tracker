@@ -7,7 +7,6 @@ import { useDatabase } from '@/hooks/useDatabase';
 import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,7 +16,7 @@ import { CalendarIcon } from '@radix-ui/react-icons';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
+import { cn, parseDateString } from '@/lib/utils';
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -33,34 +32,38 @@ const formSchema = z.object({
 
 const Index = () => {
   const { user, signOut } = useAuth();
-  const { createOrGetBillingPeriod, getGroupsForPeriod, createGroup, loading } = useDatabase();
+  const { createOrGetBillingPeriod, getGroupsForPeriod, createGroup, updateGroup, loading } = useDatabase();
   const [currentPeriod, setCurrentPeriod] = useState<BillingPeriod | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isNewGroupDialogOpen, setIsNewGroupDialogOpen] = useState(false);
+  const [isEditGroupDialogOpen, setIsEditGroupDialogOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  
+  // States for popover visibility
+  const [isCreateStartDateOpen, setIsCreateStartDateOpen] = useState(false);
+  const [isCreateEndDateOpen, setIsCreateEndDateOpen] = useState(false);
+  const [isEditStartDateOpen, setIsEditStartDateOpen] = useState(false);
+  const [isEditEndDateOpen, setIsEditEndDateOpen] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
       startDate: new Date(),
-            endDate: new Date(),
+      endDate: new Date(),
     },
   });
 
-  // Load current period and groups when month changes or user changes
   useEffect(() => {
     const loadPeriodData = async () => {
       if (!user) return;
       
-      console.log('Loading period data for:', currentMonth.getFullYear(), currentMonth.getMonth());
       const period = await createOrGetBillingPeriod(currentMonth.getFullYear(), currentMonth.getMonth());
       setCurrentPeriod(period);
       
       if (period) {
-        console.log('Loading groups for period:', period.id);
         const periodGroups = await getGroupsForPeriod(period.id);
-        console.log('Groups loaded:', periodGroups);
         setGroups(periodGroups);
       } else {
         setGroups([]);
@@ -72,7 +75,6 @@ const Index = () => {
 
   const handleCreateGroup = async (values: z.infer<typeof formSchema>) => {
     if (!currentPeriod) {
-      console.log('No current period available');
       return;
     }
 
@@ -81,6 +83,28 @@ const Index = () => {
       setGroups(prev => [...prev, newGroup]);
       setIsNewGroupDialogOpen(false);
       form.reset();
+    }
+  };
+
+  const handleEditClick = (group: Group) => {
+    setEditingGroup(group);
+    form.reset({
+      name: group.name,
+      startDate: parseDateString(group.start_date),
+      endDate: parseDateString(group.end_date),
+    });
+    setIsEditGroupDialogOpen(true);
+  };
+
+  const handleUpdateGroup = async (values: z.infer<typeof formSchema>) => {
+    if (!editingGroup || !updateGroup) return;
+
+    const updatedGroup = await updateGroup(editingGroup.id, values.name, values.startDate, values.endDate);
+
+    if (updatedGroup) {
+      setGroups(prev => prev.map(g => g.id === editingGroup.id ? updatedGroup : g));
+      setIsEditGroupDialogOpen(false);
+      setEditingGroup(null);
     }
   };
 
@@ -180,12 +204,15 @@ const Index = () => {
                     <div>
                       <h4 className="font-medium">{group.name}</h4>
                       <p className="text-sm text-gray-500">
-                        {format(new Date(group.start_date), 'dd/MM/yyyy')} - {format(new Date(group.end_date), 'dd/MM/yyyy')}
+                        {format(parseDateString(group.start_date), 'dd/MM/yyyy')} - {format(parseDateString(group.end_date), 'dd/MM/yyyy')}
                       </p>
                     </div>
-                    <Link to={`/groups/${group.id}`}>
-                      <Button variant="outline">Ver Detalles</Button>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link to={`/groups/${group.id}`}>
+                        <Button variant="outline">Ver Detalles</Button>
+                      </Link>
+                      <Button variant="secondary" onClick={() => handleEditClick(group)}>Editar</Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -194,6 +221,7 @@ const Index = () => {
         )}
       </div>
 
+      {/* Create Group Dialog */}
       <Dialog open={isNewGroupDialogOpen} onOpenChange={setIsNewGroupDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -223,7 +251,7 @@ const Index = () => {
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Fecha de Inicio</FormLabel>
-                    <Popover>
+                    <Popover open={isCreateStartDateOpen} onOpenChange={setIsCreateStartDateOpen}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -246,7 +274,11 @@ const Index = () => {
                         <Calendar
                           mode="single"
                           selected={field.value}
-                          onSelect={field.onChange}
+                          onSelect={(date) => {
+                            if (date) field.onChange(date);
+                            setIsCreateStartDateOpen(false);
+                          }}
+                          defaultMonth={field.value}
                           initialFocus
                           locale={es}
                           weekStartsOn={1}
@@ -263,7 +295,7 @@ const Index = () => {
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Fecha de Fin</FormLabel>
-                    <Popover>
+                    <Popover open={isCreateEndDateOpen} onOpenChange={setIsCreateEndDateOpen}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -286,7 +318,11 @@ const Index = () => {
                         <Calendar
                           mode="single"
                           selected={field.value}
-                          onSelect={field.onChange}
+                          onSelect={(date) => {
+                            if (date) field.onChange(date);
+                            setIsCreateEndDateOpen(false);
+                          }}
+                          defaultMonth={field.value}
                           initialFocus
                           locale={es}
                           weekStartsOn={1}
@@ -299,6 +335,126 @@ const Index = () => {
               />
               <DialogFooter>
                 <Button type="submit">Crear Agrupación</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Group Dialog */}
+      <Dialog open={isEditGroupDialogOpen} onOpenChange={setIsEditGroupDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Editar Agrupación</DialogTitle>
+            <DialogDescription>
+              Modifica el nombre y el rango de fechas de la agrupación.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleUpdateGroup)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre de la Agrupación</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: Cima Camino 1" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Fecha de Inicio</FormLabel>
+                    <Popover open={isEditStartDateOpen} onOpenChange={setIsEditStartDateOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP", { locale: es })
+                            ) : (
+                              <span>Selecciona una fecha</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={(date) => {
+                            if (date) field.onChange(date);
+                            setIsEditStartDateOpen(false);
+                          }}
+                          defaultMonth={field.value}
+                          initialFocus
+                          locale={es}
+                          weekStartsOn={1}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="endDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Fecha de Fin</FormLabel>
+                    <Popover open={isEditEndDateOpen} onOpenChange={setIsEditEndDateOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP", { locale: es })
+                            ) : (
+                              <span>Selecciona una fecha</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={(date) => {
+                            if (date) field.onChange(date);
+                            setIsEditEndDateOpen(false);
+                          }}
+                          defaultMonth={field.value}
+                          initialFocus
+                          locale={es}
+                          weekStartsOn={1}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="submit">Guardar Cambios</Button>
               </DialogFooter>
             </form>
           </Form>
