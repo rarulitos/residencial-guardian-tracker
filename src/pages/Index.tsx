@@ -1,20 +1,54 @@
 import React, { useState, useEffect } from 'react';
-import { WorkerWithHospedaje, BillingPeriod } from '@/types/database';
-import WorkerForm from '@/components/WorkerForm';
-import HospedajeCalendar from '@/components/HospedajeCalendar';
+import { BillingPeriod, Group } from '@/types/database';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LogOut, PlusCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDatabase } from '@/hooks/useDatabase';
+import { Link } from 'react-router-dom';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CalendarIcon } from '@radix-ui/react-icons';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+
+const formSchema = z.object({
+  name: z.string().min(2, {
+    message: "El nombre de la agrupación debe tener al menos 2 caracteres.",
+  }),
+  startDate: z.date({
+    required_error: "La fecha de inicio es requerida.",
+  }),
+  endDate: z.date({
+    required_error: "La fecha de fin es requerida.",
+  }),
+});
 
 const Index = () => {
   const { user, signOut } = useAuth();
-  const { createOrGetBillingPeriod, getWorkersForPeriod, addWorker, deleteWorker, toggleHospedaje, loading } = useDatabase();
+  const { createOrGetBillingPeriod, getGroupsForPeriod, createGroup, loading } = useDatabase();
   const [currentPeriod, setCurrentPeriod] = useState<BillingPeriod | null>(null);
-  const [workers, setWorkers] = useState<WorkerWithHospedaje[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [isNewGroupDialogOpen, setIsNewGroupDialogOpen] = useState(false);
 
-  // Load current period and workers when month changes or user changes
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: "",
+      startDate: new Date(),
+            endDate: new Date(),
+    },
+  });
+
+  // Load current period and groups when month changes or user changes
   useEffect(() => {
     const loadPeriodData = async () => {
       if (!user) return;
@@ -24,87 +58,30 @@ const Index = () => {
       setCurrentPeriod(period);
       
       if (period) {
-        console.log('Loading workers for period:', period.id);
-        const periodWorkers = await getWorkersForPeriod(period.id);
-        console.log('Workers loaded:', periodWorkers);
-        setWorkers(periodWorkers);
+        console.log('Loading groups for period:', period.id);
+        const periodGroups = await getGroupsForPeriod(period.id);
+        console.log('Groups loaded:', periodGroups);
+        setGroups(periodGroups);
       } else {
-        setWorkers([]);
+        setGroups([]);
       }
     };
 
     loadPeriodData();
-  }, [currentMonth, user, createOrGetBillingPeriod, getWorkersForPeriod]);
+  }, [currentMonth, user, createOrGetBillingPeriod, getGroupsForPeriod]);
 
-  const handleAddWorker = async (name: string, position: string) => {
-    console.log('handleAddWorker called with:', { name, position, currentPeriod });
+  const handleCreateGroup = async (values: z.infer<typeof formSchema>) => {
     if (!currentPeriod) {
       console.log('No current period available');
       return;
     }
 
-    console.log('Adding worker to period:', currentPeriod.id);
-    const newWorker = await addWorker(currentPeriod.id, name, position);
-    console.log('Worker added result:', newWorker);
-    
-    if (newWorker) {
-      console.log('Reloading workers for period:', currentPeriod.id);
-      // Reload workers to get updated data
-      const updatedWorkers = await getWorkersForPeriod(currentPeriod.id);
-      console.log('Updated workers:', updatedWorkers);
-      setWorkers(updatedWorkers);
+    const newGroup = await createGroup(currentPeriod.id, values.name, values.startDate, values.endDate);
+    if (newGroup) {
+      setGroups(prev => [...prev, newGroup]);
+      setIsNewGroupDialogOpen(false);
+      form.reset();
     }
-  };
-
-  const handleDeleteWorker = async (workerId: string) => {
-    const success = await deleteWorker(workerId);
-    if (success && currentPeriod) {
-      // Reload workers to get updated data
-      const updatedWorkers = await getWorkersForPeriod(currentPeriod.id);
-      setWorkers(updatedWorkers);
-    }
-  };
-
-  const handleToggleHospedaje = async (workerId: string, date: string) => {
-    // Optimistic update
-    setWorkers(prevWorkers =>
-      prevWorkers.map(worker => {
-        if (worker.id === workerId) {
-          const newHospedaje = [...worker.hospedaje];
-          const hospedajeIndex = newHospedaje.findIndex(h => h.date === date);
-
-          if (hospedajeIndex > -1) {
-            // Update existing hospedaje record
-            newHospedaje[hospedajeIndex] = {
-              ...newHospedaje[hospedajeIndex],
-              has_hospedaje: !newHospedaje[hospedajeIndex].has_hospedaje
-            };
-          } else {
-            // Create new hospedaje record
-            newHospedaje.push({
-              id: `temp-${Date.now()}`,
-              worker_id: workerId,
-              date,
-              has_hospedaje: true
-            });
-          }
-
-          return { ...worker, hospedaje: newHospedaje };
-        }
-        return worker;
-      })
-    );
-
-    // Call the database function without awaiting it for faster UI response
-    toggleHospedaje(workerId, date).catch(error => {
-      // If the database update fails, revert the state and show an error
-      console.error("Failed to update hospedaje:", error);
-      // Optionally, you can add a toast notification to inform the user
-      // And revert the state to the previous version
-      if (currentPeriod) {
-        getWorkersForPeriod(currentPeriod.id).then(setWorkers);
-      }
-    });
   };
 
   const changeMonth = (direction: 'prev' | 'next') => {
@@ -123,18 +100,6 @@ const Index = () => {
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
-
-  // Convert database workers to the format expected by the calendar
-  const currentWorkers = workers.map(worker => ({
-    id: worker.id,
-    name: worker.name,
-    position: worker.position,
-    hospedaje: worker.hospedaje.reduce((acc, h) => {
-      acc[h.date] = h.has_hospedaje;
-      return acc;
-    }, {} as { [date: string]: boolean }),
-    monthYear: `${currentMonth.getFullYear()}-${currentMonth.getMonth()}`
-  }));
 
   const handleSignOut = async () => {
     await signOut();
@@ -163,8 +128,6 @@ const Index = () => {
           </p>
         </div>
 
-        <WorkerForm onAddWorker={handleAddWorker} />
-
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
@@ -188,7 +151,7 @@ const Index = () => {
             </Button>
           </div>
           <div className="text-sm text-gray-600">
-            Total trabajadores: {currentWorkers.length}
+            Total agrupaciones: {groups.length}
           </div>
         </div>
 
@@ -197,27 +160,150 @@ const Index = () => {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
             <p className="text-gray-500 mt-2">Cargando datos...</p>
           </div>
-        ) : currentWorkers.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
-            <p className="text-gray-500 text-lg">
-              No hay trabajadores agregados para este período
-            </p>
-            <p className="text-gray-400 text-sm mt-2">
-              Agrega trabajadores usando el formulario de arriba
-            </p>
-          </div>
         ) : (
-          <>
-            <HospedajeCalendar
-              workers={currentWorkers}
-              currentMonth={currentMonth}
-              onToggleHospedaje={handleToggleHospedaje}
-              onDeleteWorker={handleDeleteWorker}
-            />
-            
-          </>
+          <div className="bg-white p-6 rounded-lg shadow">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Agrupaciones para {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}</h3>
+              <Button onClick={() => setIsNewGroupDialogOpen(true)} className="flex items-center gap-2">
+                <PlusCircle className="h-4 w-4" />
+                Crear Nueva Agrupación
+              </Button>
+            </div>
+            {groups.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No hay agrupaciones para este período. Crea una nueva para empezar.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {groups.map(group => (
+                  <div key={group.id} className="flex items-center justify-between p-3 border rounded-md">
+                    <div>
+                      <h4 className="font-medium">{group.name}</h4>
+                      <p className="text-sm text-gray-500">
+                        {format(new Date(group.start_date), 'dd/MM/yyyy')} - {format(new Date(group.end_date), 'dd/MM/yyyy')}
+                      </p>
+                    </div>
+                    <Link to={`/groups/${group.id}`}>
+                      <Button variant="outline">Ver Detalles</Button>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
+
+      <Dialog open={isNewGroupDialogOpen} onOpenChange={setIsNewGroupDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Crear Nueva Agrupación</DialogTitle>
+            <DialogDescription>
+              Define el nombre y el rango de fechas para tu nueva agrupación.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleCreateGroup)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre de la Agrupación</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: Cima Camino 1" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Fecha de Inicio</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP", { locale: es })
+                            ) : (
+                              <span>Selecciona una fecha</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          initialFocus
+                          locale={es}
+                          weekStartsOn={1}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="endDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Fecha de Fin</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP", { locale: es })
+                            ) : (
+                              <span>Selecciona una fecha</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          initialFocus
+                          locale={es}
+                          weekStartsOn={1}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="submit">Crear Agrupación</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

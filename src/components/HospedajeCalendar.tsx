@@ -10,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Trash2, Download, Calendar as CalendarIcon, CheckSquare, Square, X, ChevronDown, Settings } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { format } from 'date-fns';
+import { format, isBefore, isAfter, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
+
 
 // Define the interface for the transformed worker data that matches what Index.tsx passes
 interface CalendarWorker {
@@ -22,21 +23,24 @@ interface CalendarWorker {
   name: string;
   position: string;
   hospedaje: { [date: string]: boolean };
-  monthYear: string;
 }
 
 interface HospedajeCalendarProps {
   workers: CalendarWorker[];
-  currentMonth: Date;
+  currentMonth: Date; // Still useful for month name display
+  startDate: Date; // New prop for the start date of the group's period
+  endDate: Date;   // New prop for the end date of the group's period
   onToggleHospedaje: (workerId: string, date: string) => void;
   onDeleteWorker: (workerId: string) => void;
 }
 
-const HospedajeCalendar = ({ 
-  workers, 
-  currentMonth, 
-  onToggleHospedaje, 
-  onDeleteWorker 
+const HospedajeCalendar = ({
+  workers,
+  currentMonth,
+  startDate,
+  endDate,
+  onToggleHospedaje,
+  onDeleteWorker
 }: HospedajeCalendarProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragValue, setDragValue] = useState<boolean>(false);
@@ -52,60 +56,13 @@ const HospedajeCalendar = ({
   
   // Date range selection states
   const [showRangeSelector, setShowRangeSelector] = useState(false);
-  const [startDate, setStartDate] = useState<Date | undefined>();
-  const [endDate, setEndDate] = useState<Date | undefined>();
+  const [rangeStartDate, setRangeStartDate] = useState<Date | undefined>();
+  const [rangeEndDate, setRangeEndDate] = useState<Date | undefined>();
   const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
+  const [isRangeStartOpen, setIsRangeStartOpen] = useState(false);
+  const [isRangeEndOpen, setIsRangeEndOpen] = useState(false);
 
-  const getBillingPeriodRange = (date: Date) => {
-    // Use custom period if enabled and configured
-    if (useCustomPeriod && customPeriodStart && customPeriodEnd) {
-      return { startDate: customPeriodStart, endDate: customPeriodEnd };
-    }
-    
-    // Default billing period: from 21st of previous month to 21st of current month
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const startDate = new Date(year, month - 1, 21);
-    const endDate = new Date(year, month, 21);
-    
-    return { startDate, endDate };
-  };
-
-  const getCustomPeriodDays = () => {
-    if (!customPeriodStart || !customPeriodEnd) return 0;
-    const diffTime = Math.abs(customPeriodEnd.getTime() - customPeriodStart.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-  };
-
-  const applyCustomPeriod = () => {
-    if (!customPeriodStart || !customPeriodEnd) return;
-    if (customPeriodStart >= customPeriodEnd) return;
-    
-    setUseCustomPeriod(true);
-    setIsModalOpen(false);
-    
-    const totalDays = Math.ceil((customPeriodEnd.getTime() - customPeriodStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    
-    toast({
-      title: "Período personalizado aplicado",
-      description: `Período configurado: ${format(customPeriodStart, 'dd/MM/yyyy', { locale: es })} - ${format(customPeriodEnd, 'dd/MM/yyyy', { locale: es })} (${totalDays} días)`,
-    });
-  };
-
-  const resetToStandardPeriod = () => {
-    setUseCustomPeriod(false);
-    setCustomPeriodStart(undefined);
-    setCustomPeriodEnd(undefined);
-    setIsModalOpen(false);
-    
-    toast({
-      title: "Período estándar aplicado",
-      description: "Se ha restablecido el período estándar (21-21)",
-    });
-  };
-
-  const getBillingPeriodDays = (date: Date) => {
-    const { startDate, endDate } = getBillingPeriodRange(date);
+  const getBillingPeriodDays = () => {
     const days: { day: number, month: number, year: number, date: Date }[] = [];
     
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
@@ -130,7 +87,7 @@ const HospedajeCalendar = ({
   };
 
   const getDayTotals = () => {
-    const days = getBillingPeriodDays(currentMonth);
+    const days = getBillingPeriodDays();
     return days.map(dayData => {
       const dateStr = formatDateFromDayData(dayData);
       const count = workers.reduce((total, worker) => {
@@ -141,7 +98,7 @@ const HospedajeCalendar = ({
   };
 
   const calculateFinancialSummary = () => {
-    const days = getBillingPeriodDays(currentMonth);
+    const days = getBillingPeriodDays();
     
     const totalWorkerDays = workers.reduce((total, worker) => {
       return total + days.reduce((workerTotal, dayData) => {
@@ -172,6 +129,7 @@ const HospedajeCalendar = ({
   };
 
   const handleMouseDown = (workerId: string, date: string) => {
+    console.log('handleMouseDown called for:', workerId, date);
     const currentValue = workers.find(w => w.id === workerId)?.hospedaje[date] || false;
     setIsDragging(true);
     setDragValue(!currentValue);
@@ -181,6 +139,7 @@ const HospedajeCalendar = ({
 
   const handleMouseEnter = (workerId: string, date: string) => {
     if (isDragging) {
+      console.log('handleMouseEnter called for:', workerId, date);
       const currentValue = workers.find(w => w.id === workerId)?.hospedaje[date] || false;
       if (currentValue !== dragValue) {
         onToggleHospedaje(workerId, date);
@@ -193,21 +152,15 @@ const HospedajeCalendar = ({
     setDragStartCell(null);
   };
 
-  // Date range functions
+  // Date range selection functions
   const getDateRange = () => {
-    if (!startDate || !endDate) return [];
+    if (!rangeStartDate || !rangeEndDate) return [];
     
     const dates = [];
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const start = new Date(rangeStartDate);
+    const end = new Date(rangeEndDate);
     
-    // Ensure dates are in current billing period
-    const { startDate: periodStart, endDate: periodEnd } = getBillingPeriodRange(currentMonth);
-    
-    const rangeStart = start < periodStart ? periodStart : start;
-    const rangeEnd = end > periodEnd ? periodEnd : end;
-    
-    for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       dates.push(d.toISOString().split('T')[0]);
     }
     
@@ -241,20 +194,20 @@ const HospedajeCalendar = ({
   };
 
   const resetRangeSelector = () => {
-    setStartDate(undefined);
-    setEndDate(undefined);
+    setRangeStartDate(undefined);
+    setRangeEndDate(undefined);
     setSelectedWorkerIds([]);
     setShowRangeSelector(false);
   };
 
   const isDateInRange = (dayData: { day: number, month: number, year: number }) => {
-    if (!startDate || !endDate) return false;
+    if (!rangeStartDate || !rangeEndDate) return false;
     const dateStr = formatDateFromDayData(dayData);
     return getDateRange().includes(dateStr);
   };
 
   const exportToExcel = () => {
-    const days = getBillingPeriodDays(currentMonth);
+    const days = getBillingPeriodDays();
     const dayTotals = getDayTotals();
     const financialSummary = calculateFinancialSummary();
     
@@ -323,18 +276,13 @@ const HospedajeCalendar = ({
     XLSX.utils.book_append_sheet(wb, ws, 'Hospedaje');
     
     // Generar nombre del archivo con período de facturación
-    const { startDate: periodStart, endDate: periodEnd } = getBillingPeriodRange(currentMonth);
-    const monthNames = [
-      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-    ];
-    const fileName = `Hospedaje_Periodo_${format(periodStart, 'dd-MMM', { locale: es })}_${format(periodEnd, 'dd-MMM', { locale: es })}_${currentMonth.getFullYear()}.xlsx`;
+    const fileName = `Hospedaje_Periodo_${format(startDate, 'dd-MMM', { locale: es })}_${format(endDate, 'dd-MMM', { locale: es })}_${startDate.getFullYear()}.xlsx`;
     
     // Descargar el archivo
     XLSX.writeFile(wb, fileName);
   };
 
-  const days = getBillingPeriodDays(currentMonth);
+  const days = getBillingPeriodDays();
   const dayTotals = getDayTotals();
   const financialSummary = calculateFinancialSummary();
 
@@ -348,9 +296,9 @@ const HospedajeCalendar = ({
       <CardHeader>
         <div className="flex justify-between items-center">
           <CardTitle>
-            Período {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            Hospedaje de Trabajadores
               <div className="text-sm font-normal text-gray-600">
-                {format(getBillingPeriodRange(currentMonth).startDate, 'dd MMM', { locale: es })} - {format(getBillingPeriodRange(currentMonth).endDate, 'dd MMM', { locale: es })}
+                {format(startDate, 'dd MMM yyyy', { locale: es })} - {format(endDate, 'dd MMM yyyy', { locale: es })}
               </div>
           </CardTitle>
           <div className="flex items-center gap-4">
@@ -365,113 +313,6 @@ const HospedajeCalendar = ({
                 placeholder="Precio por día"
               />
             </div>
-            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="flex items-center gap-2">
-                  <Settings className="h-4 w-4" />
-                  Configurar Período
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[600px]">
-                <DialogHeader>
-                  <DialogTitle>Configurar Período de Facturación</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Custom Start Date */}
-                    <div>
-                      <Label>Fecha de inicio del período</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal",
-                              !customPeriodStart && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {customPeriodStart ? format(customPeriodStart, "dd/MM/yyyy", { locale: es }) : "Seleccionar fecha"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={customPeriodStart}
-                            onSelect={setCustomPeriodStart}
-                            initialFocus
-                            locale={es}
-                            className={cn("p-3 pointer-events-auto")}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-
-                    {/* Custom End Date */}
-                    <div>
-                      <Label>Fecha de fin del período</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal",
-                              !customPeriodEnd && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {customPeriodEnd ? format(customPeriodEnd, "dd/MM/yyyy", { locale: es }) : "Seleccionar fecha"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={customPeriodEnd}
-                            onSelect={setCustomPeriodEnd}
-                            disabled={(date) => customPeriodStart && date <= customPeriodStart}
-                            initialFocus
-                            locale={es}
-                            className={cn("p-3 pointer-events-auto")}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
-
-                  {/* Period Summary */}
-                  <div className="p-3 bg-blue-50 rounded text-sm">
-                    <div className="font-medium mb-1">
-                      {useCustomPeriod ? 'Período Personalizado Activo' : 'Período Estándar (21-21)'}
-                    </div>
-                    <div>
-                      <strong>Rango:</strong> {format(getBillingPeriodRange(currentMonth).startDate, 'dd/MM/yyyy', { locale: es })} - {format(getBillingPeriodRange(currentMonth).endDate, 'dd/MM/yyyy', { locale: es })}
-                    </div>
-                    <div>
-                      <strong>Total días:</strong> {days.length} días
-                      {useCustomPeriod && customPeriodStart && customPeriodEnd && (
-                        <span className="text-green-600 font-medium"> (personalizado)</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      onClick={resetToStandardPeriod}
-                      variant="outline"
-                    >
-                      Período Estándar
-                    </Button>
-                    <Button
-                      onClick={applyCustomPeriod}
-                      disabled={!customPeriodStart || !customPeriodEnd || customPeriodStart >= customPeriodEnd}
-                    >
-                      Aplicar Período
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
             <Button onClick={exportToExcel} className="flex items-center gap-2">
               <Download className="h-4 w-4" />
               Exportar Excel
@@ -498,27 +339,29 @@ const HospedajeCalendar = ({
                 {/* Start Date */}
                 <div>
                   <Label>Fecha inicial</Label>
-                  <Popover>
+                  <Popover open={isRangeStartOpen} onOpenChange={setIsRangeStartOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         className={cn(
                           "w-full justify-start text-left font-normal",
-                          !startDate && "text-muted-foreground"
+                          !rangeStartDate && "text-muted-foreground"
                         )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {startDate ? format(startDate, "dd/MM/yyyy", { locale: es }) : "Seleccionar"}
+                        {rangeStartDate ? format(rangeStartDate, "dd/MM/yyyy", { locale: es }) : "Seleccionar"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
                       <Calendar
                         mode="single"
-                        selected={startDate}
-                        onSelect={setStartDate}
+                        selected={rangeStartDate}
+                        onSelect={(date) => {
+                          setRangeStartDate(date);
+                          setIsRangeStartOpen(false);
+                        }}
                         disabled={(date) => {
-                          const { startDate: periodStart, endDate: periodEnd } = getBillingPeriodRange(currentMonth);
-                          return date < periodStart || date > periodEnd;
+                          return isBefore(date, startOfDay(startDate)) || isAfter(date, startOfDay(endDate));
                         }}
                         initialFocus
                         locale={es}
@@ -531,27 +374,29 @@ const HospedajeCalendar = ({
                 {/* End Date */}
                 <div>
                   <Label>Fecha final</Label>
-                  <Popover>
+                  <Popover open={isRangeEndOpen} onOpenChange={setIsRangeEndOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         className={cn(
                           "w-full justify-start text-left font-normal",
-                          !endDate && "text-muted-foreground"
+                          !rangeEndDate && "text-muted-foreground"
                         )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {endDate ? format(endDate, "dd/MM/yyyy", { locale: es }) : "Seleccionar"}
+                        {rangeEndDate ? format(rangeEndDate, "dd/MM/yyyy", { locale: es }) : "Seleccionar"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
                       <Calendar
                         mode="single"
-                        selected={endDate}
-                        onSelect={setEndDate}
+                        selected={rangeEndDate}
+                        onSelect={(date) => {
+                          setRangeEndDate(date);
+                          setIsRangeEndOpen(false);
+                        }}
                         disabled={(date) => {
-                          const { startDate: periodStart, endDate: periodEnd } = getBillingPeriodRange(currentMonth);
-                          return date < periodStart || date > periodEnd || (startDate && date < startDate);
+                          return isBefore(date, startOfDay(startDate)) || isAfter(date, startOfDay(endDate)) || (rangeStartDate && isBefore(date, startOfDay(rangeStartDate)));
                         }}
                         initialFocus
                         locale={es}
@@ -624,7 +469,7 @@ const HospedajeCalendar = ({
                   <div className="flex gap-2">
                     <Button
                       onClick={() => applyRangeSelection(true)}
-                      disabled={!startDate || !endDate}
+                      disabled={!rangeStartDate || !rangeEndDate}
                       size="sm"
                       className="flex items-center gap-1"
                     >
@@ -633,7 +478,7 @@ const HospedajeCalendar = ({
                     </Button>
                     <Button
                       onClick={() => applyRangeSelection(false)}
-                      disabled={!startDate || !endDate}
+                      disabled={!rangeStartDate || !rangeEndDate}
                       variant="outline"
                       size="sm"
                       className="flex items-center gap-1"
@@ -653,10 +498,10 @@ const HospedajeCalendar = ({
                 </div>
               </div>
               
-              {startDate && endDate && (
+              {rangeStartDate && rangeEndDate && (
                 <div className="mt-3 p-2 bg-blue-100 rounded text-sm">
                   <strong>Rango seleccionado:</strong> {getDateRange().length} días 
-                  ({format(startDate, "dd/MM", { locale: es })} - {format(endDate, "dd/MM", { locale: es })})
+                  ({format(rangeStartDate, "dd/MM", { locale: es })} - {format(rangeEndDate, "dd/MM", { locale: es })})
                   {selectedWorkerIds.length > 0 && selectedWorkerIds.length < workers.length && (
                     <span> para {selectedWorkerIds.length} trabajador{selectedWorkerIds.length > 1 ? 'es' : ''} seleccionado{selectedWorkerIds.length > 1 ? 's' : ''}</span>
                   )}
@@ -705,9 +550,8 @@ const HospedajeCalendar = ({
                       const dateStr = formatDateFromDayData(dayData);
                       const isChecked = worker.hospedaje[dateStr] || false;
                       const inRange = isDateInRange(dayData);
-                      const isNewMonth = dayData.month !== currentMonth.getMonth();
                       return (
-                        <td key={`cell-${dayData.day}-${dayData.month}`} className={`border p-1 text-center ${inRange ? 'bg-yellow-50' : ''} ${isNewMonth ? 'bg-gray-100' : ''}`}>
+                        <td key={`cell-${dayData.day}-${dayData.month}`} className={`border p-1 text-center ${inRange ? 'bg-yellow-50' : ''}`}>
                           <div
                             onMouseDown={() => handleMouseDown(worker.id, dateStr)}
                             onMouseEnter={() => handleMouseEnter(worker.id, dateStr)}

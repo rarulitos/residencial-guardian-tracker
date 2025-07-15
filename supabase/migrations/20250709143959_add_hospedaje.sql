@@ -3,7 +3,7 @@ DELETE FROM public.worker_hospedaje
 WHERE worker_id NOT IN (SELECT id FROM public.workers);
 
 -- Create a global workers table (independent of periods)
-CREATE TABLE public.global_workers (
+CREATE TABLE IF NOT EXISTS public.global_workers (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL,
   name TEXT NOT NULL,
@@ -17,21 +17,25 @@ CREATE TABLE public.global_workers (
 ALTER TABLE public.global_workers ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for global_workers
+DROP POLICY IF EXISTS "Users can view their own global workers" ON public.global_workers;
 CREATE POLICY "Users can view their own global workers" 
 ON public.global_workers 
 FOR SELECT 
 USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create their own global workers" ON public.global_workers;
 CREATE POLICY "Users can create their own global workers" 
 ON public.global_workers 
 FOR INSERT 
 WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own global workers" ON public.global_workers;
 CREATE POLICY "Users can update their own global workers" 
 ON public.global_workers 
 FOR UPDATE 
 USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own global workers" ON public.global_workers;
 CREATE POLICY "Users can delete their own global workers" 
 ON public.global_workers 
 FOR DELETE 
@@ -45,7 +49,7 @@ GROUP BY user_id, name, position
 ON CONFLICT (user_id, name, position) DO NOTHING;
 
 -- Create worker_period_assignments table to link workers to periods
-CREATE TABLE public.worker_period_assignments (
+CREATE TABLE IF NOT EXISTS public.worker_period_assignments (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   worker_id UUID NOT NULL REFERENCES public.global_workers(id) ON DELETE CASCADE,
   billing_period_id UUID NOT NULL REFERENCES public.billing_periods(id) ON DELETE CASCADE,
@@ -57,6 +61,7 @@ CREATE TABLE public.worker_period_assignments (
 ALTER TABLE public.worker_period_assignments ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for worker_period_assignments
+DROP POLICY IF EXISTS "Users can view their worker assignments" ON public.worker_period_assignments;
 CREATE POLICY "Users can view their worker assignments" 
 ON public.worker_period_assignments 
 FOR SELECT 
@@ -66,6 +71,7 @@ USING (EXISTS (
   AND user_id = auth.uid()
 ));
 
+DROP POLICY IF EXISTS "Users can create their worker assignments" ON public.worker_period_assignments;
 CREATE POLICY "Users can create their worker assignments" 
 ON public.worker_period_assignments 
 FOR INSERT 
@@ -75,6 +81,7 @@ WITH CHECK (EXISTS (
   AND user_id = auth.uid()
 ));
 
+DROP POLICY IF EXISTS "Users can delete their worker assignments" ON public.worker_period_assignments;
 CREATE POLICY "Users can delete their worker assignments" 
 ON public.worker_period_assignments 
 FOR DELETE 
@@ -162,6 +169,7 @@ USING (EXISTS (
 ));
 
 -- Add triggers for updated_at
+DROP TRIGGER IF EXISTS update_global_workers_updated_at ON public.global_workers;
 CREATE TRIGGER update_global_workers_updated_at
 BEFORE UPDATE ON public.global_workers
 FOR EACH ROW
