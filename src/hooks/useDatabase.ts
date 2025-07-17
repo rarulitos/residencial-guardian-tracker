@@ -76,9 +76,8 @@ export const useDatabase = () => {
         .eq('billing_period_id', billingPeriodId);
 
       if (error) throw error;
+      console.log('[getGroupsForPeriod] Fetched groups:', groups);
       
-      // The type from Supabase should be compatible with GroupWithWorkers
-      // but we cast it to ensure type safety in the rest of the app.
       return (groups as any) || [];
     } catch (error) {
       console.error('Error getting groups for period:', error);
@@ -106,19 +105,26 @@ export const useDatabase = () => {
   const createGroup = useCallback(async (billingPeriodId: string, name: string, startDate: Date, endDate: Date, pricePerNight: number): Promise<Group | null> => {
     if (!user) return null;
     try {
+      const groupData = {
+        billing_period_id: billingPeriodId,
+        name,
+        start_date: toYYYYMMDD(startDate),
+        end_date: toYYYYMMDD(endDate),
+        price_per_night: pricePerNight,
+        user_id: user.id,
+      };
+
       const { data, error } = await supabase
         .from('groups')
-        .insert({
-          billing_period_id: billingPeriodId,
-          name,
-          start_date: toYYYYMMDD(startDate),
-          end_date: toYYYYMMDD(endDate),
-          price_per_night: pricePerNight,
-        })
+        .insert(groupData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating group in Supabase:', error);
+        throw error;
+      }
+      
       return data;
     } catch (error) {
       console.error('Error creating group:', error);
@@ -229,6 +235,17 @@ export const useDatabase = () => {
     }
   }, []);
 
+  const deleteGroup = useCallback(async (groupId: string): Promise<boolean> => {
+    try {
+      const { error } = await supabase.from('groups').delete().eq('id', groupId);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error deleting group:', error);
+      return false;
+    }
+  }, []);
+
   const toggleHospedaje = useCallback(async (workerId: string, date: string): Promise<boolean> => {
     try {
       const { data: existing } = await supabase.from('worker_hospedaje').select('*').eq('worker_id', workerId).eq('date', date).maybeSingle();
@@ -257,6 +274,7 @@ export const useDatabase = () => {
     getWorkersForGroup,
     addWorker,
     deleteWorker,
+    deleteGroup,
     toggleHospedaje,
   };
 };

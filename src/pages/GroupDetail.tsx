@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDatabase } from '@/hooks/useDatabase';
 import { Group, WorkerWithHospedaje } from '@/types/database';
@@ -19,6 +19,17 @@ const GroupDetail = () => {
   const { getGroupById, getWorkersForGroup, addWorker, deleteWorker, toggleHospedaje, loading } = useDatabase();
   const [group, setGroup] = useState<Group | null>(null);
   const [workers, setWorkers] = useState<WorkerWithHospedaje[]>([]);
+
+  const currentWorkersForCalendar = useMemo(() => workers.map(worker => ({
+    id: worker.id,
+    name: worker.name,
+    position: worker.position,
+    faena: worker.faena,
+    hospedaje: worker.hospedaje.reduce((acc, h) => {
+      acc[h.date] = h.has_hospedaje;
+      return acc;
+    }, {} as { [date: string]: boolean }),
+  })), [workers]);
 
   useEffect(() => {
     const loadGroupData = async () => {
@@ -81,7 +92,15 @@ const GroupDetail = () => {
       })
     );
 
-    toggleHospedaje(workerId, date).catch(error => {
+    toggleHospedaje(workerId, date).then(success => {
+      console.log(`[GroupDetail] toggleHospedaje success: ${success}`);
+      if (success && groupId) {
+        getWorkersForGroup(groupId).then(updatedWorkers => {
+          setWorkers(updatedWorkers);
+          console.log('[GroupDetail] Workers re-fetched after toggle:', updatedWorkers);
+        });
+      }
+    }).catch(error => {
       console.error("Failed to update hospedaje:", error);
       if (groupId) {
         getWorkersForGroup(groupId).then(setWorkers);
@@ -286,17 +305,6 @@ const GroupDetail = () => {
   const endDate = parseDateString(group.end_date);
   const currentMonth = startDate;
 
-  const currentWorkersForCalendar = workers.map(worker => ({
-    id: worker.id,
-    name: worker.name,
-    position: worker.position,
-    faena: worker.faena,
-    hospedaje: worker.hospedaje.reduce((acc, h) => {
-      acc[h.date] = h.has_hospedaje;
-      return acc;
-    }, {} as { [date: string]: boolean }),
-  }));
-
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
@@ -334,9 +342,6 @@ const GroupDetail = () => {
             <h2 className="text-xl font-semibold">Agrupación: {group.name}</h2>
             <p className="text-gray-600 text-sm">
               Período: {format(startDate, 'dd/MM/yyyy')} - {format(endDate, 'dd/MM/yyyy')}
-            </p>
-            <p className="text-gray-600 text-sm">
-              Precio Unitario: ${group.price_per_night?.toLocaleString('es-CL')} (Crudo: {group.price_per_night})
             </p>
           </div>
         </div>

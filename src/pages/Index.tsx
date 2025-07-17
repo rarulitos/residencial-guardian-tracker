@@ -1,10 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { BillingPeriod, Group, GroupWithWorkers } from '@/types/database';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, LogOut, PlusCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LogOut, PlusCircle, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDatabase } from '@/hooks/useDatabase';
 import { Link } from 'react-router-dom';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useForm } from 'react-hook-form';
@@ -35,13 +45,15 @@ const formSchema = z.object({
 
 const Index = () => {
   const { user, signOut } = useAuth();
-  const { createOrGetBillingPeriod, getGroupsForPeriod, createGroup, updateGroup, loading } = useDatabase();
+  const { createOrGetBillingPeriod, getGroupsForPeriod, createGroup, updateGroup, deleteGroup, loading } = useDatabase();
   const [currentPeriod, setCurrentPeriod] = useState<BillingPeriod | null>(null);
   const [groups, setGroups] = useState<GroupWithWorkers[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isNewGroupDialogOpen, setIsNewGroupDialogOpen] = useState(false);
   const [isEditGroupDialogOpen, setIsEditGroupDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [groupToDelete, setGroupToDelete] = useState<Group | null>(null);
   
   // States for popover visibility
   const [isCreateStartDateOpen, setIsCreateStartDateOpen] = useState(false);
@@ -60,7 +72,7 @@ const Index = () => {
   });
 
   const calculateTotalForGroup = (group: GroupWithWorkers) => {
-    const unitPrice = 25000; // Asumiendo el precio fijo
+    const unitPrice = group.price_per_night || 0; // Use the group's price per night
     
     const groupStartDate = parseDateString(group.start_date);
     const groupEndDate = parseDateString(group.end_date);
@@ -95,13 +107,14 @@ const Index = () => {
       if (period) {
         const periodGroups = await getGroupsForPeriod(period.id);
         setGroups(periodGroups);
+        console.log('[Index] Fetched period groups:', periodGroups);
       } else {
         setGroups([]);
       }
     };
 
     loadPeriodData();
-  }, [currentMonth, user, createOrGetBillingPeriod, getGroupsForPeriod]);
+  }, [currentMonth, user, createOrGetBillingPeriod, getGroupsForPeriod, location.key]);
 
   const handleCreateGroup = async (values: z.infer<typeof formSchema>) => {
     if (!currentPeriod) {
@@ -110,7 +123,12 @@ const Index = () => {
 
     const newGroup = await createGroup(currentPeriod.id, values.name, values.startDate, values.endDate, values.pricePerNight);
     if (newGroup) {
-      setGroups(prev => [...prev, newGroup]);
+      // Add an empty workers array to the new group to match the GroupWithWorkers type
+      const newGroupWithWorkers: GroupWithWorkers = {
+        ...newGroup,
+        workers: [],
+      };
+      setGroups(prev => [...prev, newGroupWithWorkers]);
       setIsNewGroupDialogOpen(false);
       form.reset();
     }
@@ -141,6 +159,25 @@ const Index = () => {
       setIsEditGroupDialogOpen(false);
       setEditingGroup(null);
     }
+  };
+
+  const handleDeleteClick = (group: Group) => {
+    setGroupToDelete(group);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!groupToDelete) return;
+
+    const success = await deleteGroup(groupToDelete.id);
+    if (success) {
+      setGroups(prev => prev.filter(g => g.id !== groupToDelete.id));
+      // toast({ title: "Éxito", description: "La agrupación ha sido eliminada." });
+    } else {
+      // toast({ title: "Error", description: "No se pudo eliminar la agrupación.", variant: "destructive" });
+    }
+    setIsDeleteDialogOpen(false);
+    setGroupToDelete(null);
   };
 
   const changeMonth = (direction: 'prev' | 'next') => {
@@ -242,10 +279,16 @@ const Index = () => {
                         {format(parseDateString(group.start_date), 'dd/MM/yyyy')} - {format(parseDateString(group.end_date), 'dd/MM/yyyy')}
                       </p>
                       <p className="text-sm font-semibold text-green-600 mt-1">
-                        Total a Pagar: {calculateTotalForGroup(group)}
+                        Total a Pagar: {(() => {
+                          console.log('[Index] Calculating total for group:', group.name, 'price_per_night:', group.price_per_night);
+                          return calculateTotalForGroup(group);
+                        })()}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleDeleteClick(group)}>
+                        Eliminar
+                      </Button>
                       <Button variant="outline" onClick={() => handleEditClick(group)}>Editar</Button>
                       <Link to={`/groups/${group.id}`}>
                         <Button variant="outline">Ver Detalles</Button>
@@ -524,6 +567,24 @@ const Index = () => {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro de que deseas eliminar esta agrupación?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción es permanente y eliminará la agrupación, todos sus trabajadores asociados y sus registros de hospedaje. No se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setGroupToDelete(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete}>
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

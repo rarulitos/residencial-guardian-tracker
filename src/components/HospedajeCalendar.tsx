@@ -8,7 +8,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Trash2, Calendar as CalendarIcon, CheckSquare, Square, X, ChevronDown, Settings } from 'lucide-react';
+import { Trash2, Calendar as CalendarIcon, CheckSquare, Square, X, ChevronDown, Settings, Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { format, isBefore, isAfter, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -486,7 +486,7 @@ const HospedajeCalendar = ({
                                   : 'bg-white border-gray-300 hover:border-blue-300'
                             }`}
                           >
-                            {isChecked && <span className="text-white text-xs font-bold">✓</span>}
+                            {isChecked && <Check className="h-3 w-3 text-white" />}
                           </div>
                         </td>
                       );
