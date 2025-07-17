@@ -88,7 +88,6 @@ export const useDatabase = () => {
 
   const getGroupById = useCallback(async (groupId: string): Promise<Group | null> => {
     if (!user) return null;
-    console.log(`[getGroupById] Attempting to fetch group ${groupId}`);
     try {
       const { data: group, error } = await supabase
         .from('groups')
@@ -97,7 +96,6 @@ export const useDatabase = () => {
         .single();
 
       if (error) throw error;
-      console.log(`[getGroupById] Successfully fetched group. price_per_night: ${group?.price_per_night}`);
       return group;
     } catch (error) {
       console.error('Error getting group by ID:', error);
@@ -130,7 +128,6 @@ export const useDatabase = () => {
 
   const updateGroup = useCallback(async (groupId: string, name: string, startDate: Date, endDate: Date, pricePerNight: number): Promise<Group | null> => {
     if (!user) return null;
-    console.log(`[updateGroup] Attempting to update group ${groupId} with pricePerNight: ${pricePerNight}`);
     try {
       const { data, error } = await supabase
         .from('groups')
@@ -145,7 +142,6 @@ export const useDatabase = () => {
         .single();
 
       if (error) throw error;
-      console.log(`[updateGroup] Successfully updated group. Returned data price_per_night: ${data?.price_per_night}`);
       return data;
     } catch (error) {
       console.error('Error updating group:', error);

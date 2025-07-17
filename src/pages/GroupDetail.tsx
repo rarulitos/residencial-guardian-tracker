@@ -27,7 +27,6 @@ const GroupDetail = () => {
       const fetchedGroup = await getGroupById(groupId);
       setGroup(fetchedGroup);
       if (fetchedGroup) {
-        console.log(`[GroupDetail] Group state updated. pricePerNight: ${fetchedGroup.price_per_night}`);
         const fetchedWorkers = await getWorkersForGroup(groupId);
         setWorkers(fetchedWorkers);
       }
@@ -336,6 +335,9 @@ const GroupDetail = () => {
             <p className="text-gray-600 text-sm">
               Período: {format(startDate, 'dd/MM/yyyy')} - {format(endDate, 'dd/MM/yyyy')}
             </p>
+            <p className="text-gray-600 text-sm">
+              Precio Unitario: ${group.price_per_night?.toLocaleString('es-CL')} (Crudo: {group.price_per_night})
+            </p>
           </div>
         </div>
 
@@ -358,6 +360,7 @@ const GroupDetail = () => {
             endDate={endDate}
             onToggleHospedaje={handleToggleHospedaje}
             onDeleteWorker={handleDeleteWorker}
+            groupPricePerNight={group.price_per_night || 0}
           />
         )}
       </div>

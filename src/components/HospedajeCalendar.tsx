@@ -32,6 +32,7 @@ interface HospedajeCalendarProps {
   endDate: Date;   // New prop for the end date of the group's period
   onToggleHospedaje: (workerId: string, date: string) => void;
   onDeleteWorker: (workerId: string) => void;
+  groupPricePerNight: number; // New prop for the group's price per night
 }
 
 const HospedajeCalendar = ({
@@ -40,12 +41,12 @@ const HospedajeCalendar = ({
   startDate,
   endDate,
   onToggleHospedaje,
-  onDeleteWorker
+  onDeleteWorker,
+  groupPricePerNight
 }: HospedajeCalendarProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragValue, setDragValue] = useState<boolean>(false);
   const [dragStartCell, setDragStartCell] = useState<{workerId: string, date: string} | null>(null);
-  const [unitPrice, setUnitPrice] = useState<number>(25000);
   const { toast } = useToast();
   
   // Custom period configuration states
@@ -107,13 +108,13 @@ const HospedajeCalendar = ({
       }, 0);
     }, 0);
 
-    const netTotal = totalWorkerDays * unitPrice;
+    const netTotal = totalWorkerDays * groupPricePerNight;
     const iva = netTotal * 0.19;
     const totalToPay = netTotal + iva;
 
     return {
       totalWorkerDays,
-      unitPrice,
+      unitPrice: groupPricePerNight,
       netTotal,
       iva,
       totalToPay
@@ -231,10 +232,10 @@ const HospedajeCalendar = ({
               <Input
                 id="unitPrice"
                 type="number"
-                value={unitPrice}
-                onChange={(e) => setUnitPrice(Number(e.target.value))}
+                value={groupPricePerNight}
                 className="w-32"
                 placeholder="Precio por día"
+                readOnly // Make it read-only as it comes from group data
               />
             </div>
           </div>
