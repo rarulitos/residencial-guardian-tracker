@@ -45,6 +45,7 @@ export type Database = {
           end_date: string;
           id: string;
           name: string;
+          price_per_night: number | null;
           start_date: string;
           user_id: string;
         };

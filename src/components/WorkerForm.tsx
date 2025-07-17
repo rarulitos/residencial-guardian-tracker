@@ -6,19 +6,21 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface WorkerFormProps {
-  onAddWorker: (name: string, position: string) => void;
+  onAddWorker: (name: string, position: string, faena: string) => void;
 }
 
 const WorkerForm = ({ onAddWorker }: WorkerFormProps) => {
   const [name, setName] = useState('');
   const [position, setPosition] = useState('');
+  const [faena, setFaena] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim() && position.trim()) {
-      onAddWorker(name.trim(), position.trim());
+    if (name.trim() && position.trim() && faena.trim()) {
+      onAddWorker(name.trim(), position.trim(), faena.trim());
       setName('');
       setPosition('');
+      setFaena('');
     }
   };
 
@@ -45,6 +47,15 @@ const WorkerForm = ({ onAddWorker }: WorkerFormProps) => {
               value={position}
               onChange={(e) => setPosition(e.target.value)}
               placeholder="Cargo o especialidad"
+            />
+          </div>
+          <div className="flex-1">
+            <Label htmlFor="faena">Faena</Label>
+            <Input
+              id="faena"
+              value={faena}
+              onChange={(e) => setFaena(e.target.value)}
+              placeholder="Nombre de la faena"
             />
           </div>
           <Button type="submit">Agregar</Button>

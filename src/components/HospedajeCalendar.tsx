@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { WorkerWithHospedaje } from '@/types/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,12 +8,11 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Trash2, Download, Calendar as CalendarIcon, CheckSquare, Square, X, ChevronDown, Settings } from 'lucide-react';
+import { Trash2, Calendar as CalendarIcon, CheckSquare, Square, X, ChevronDown, Settings } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { format, isBefore, isAfter, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 
 
@@ -22,6 +21,7 @@ interface CalendarWorker {
   id: string;
   name: string;
   position: string;
+  faena: string;
   hospedaje: { [date: string]: boolean };
 }
 
@@ -206,82 +206,6 @@ const HospedajeCalendar = ({
     return getDateRange().includes(dateStr);
   };
 
-  const exportToExcel = () => {
-    const days = getBillingPeriodDays();
-    const dayTotals = getDayTotals();
-    const financialSummary = calculateFinancialSummary();
-    
-    // Crear los datos para Excel
-    const excelData = [];
-    
-    // Header con días y meses
-    const header = ['Trabajador', 'Cargo', ...days.map(d => `${d.day}/${d.month + 1}`), 'Total'];
-    excelData.push(header);
-    
-    // Datos de trabajadores
-    workers.forEach(worker => {
-      const workerTotal = days.reduce((total, dayData) => {
-        const dateStr = formatDateFromDayData(dayData);
-        return total + (worker.hospedaje[dateStr] ? 1 : 0);
-      }, 0);
-      
-      const row = [
-        worker.name,
-        worker.position,
-        ...days.map(dayData => {
-          const dateStr = formatDateFromDayData(dayData);
-          return worker.hospedaje[dateStr] ? '✓' : '';
-        }),
-        workerTotal
-      ];
-      excelData.push(row);
-    });
-    
-    // Fila de totales
-    const totalRow = [
-      'TOTAL POR DÍA',
-      '',
-      ...dayTotals.map(({ count }) => count > 0 ? count : ''),
-      financialSummary.totalWorkerDays
-    ];
-    excelData.push(totalRow);
-    
-    // Espacios en blanco
-    excelData.push([]);
-    excelData.push([]);
-    
-    // Resumen Financiero
-    excelData.push(['RESUMEN FINANCIERO']);
-    excelData.push([]);
-    excelData.push(['Concepto', 'Valor']);
-    excelData.push(['Me gusta', financialSummary.totalWorkerDays]);
-    excelData.push(['Precio unitario por alojamiento', formatCurrency(financialSummary.unitPrice)]);
-    excelData.push(['Total neto (sin IVA)', formatCurrency(financialSummary.netTotal)]);
-    excelData.push(['IVA (19%)', formatCurrency(financialSummary.iva)]);
-    excelData.push(['MONTO TOTAL A PAGAR', formatCurrency(financialSummary.totalToPay)]);
-    
-    // Crear el libro de trabajo
-    const ws = XLSX.utils.aoa_to_sheet(excelData);
-    const wb = XLSX.utils.book_new();
-    
-    // Configurar ancho de columnas
-    const colWidths = [
-      { wch: 20 }, // Trabajador
-      { wch: 15 }, // Cargo
-      ...days.map(() => ({ wch: 6 })), // Días
-      { wch: 8 } // Total
-    ];
-    ws['!cols'] = colWidths;
-    
-    XLSX.utils.book_append_sheet(wb, ws, 'Hospedaje');
-    
-    // Generar nombre del archivo con período de facturación
-    const fileName = `Hospedaje_Periodo_${format(startDate, 'dd-MMM', { locale: es })}_${format(endDate, 'dd-MMM', { locale: es })}_${startDate.getFullYear()}.xlsx`;
-    
-    // Descargar el archivo
-    XLSX.writeFile(wb, fileName);
-  };
-
   const days = getBillingPeriodDays();
   const dayTotals = getDayTotals();
   const financialSummary = calculateFinancialSummary();
@@ -313,10 +237,6 @@ const HospedajeCalendar = ({
                 placeholder="Precio por día"
               />
             </div>
-            <Button onClick={exportToExcel} className="flex items-center gap-2">
-              <Download className="h-4 w-4" />
-              Exportar Excel
-            </Button>
           </div>
         </div>
       </CardHeader>
@@ -518,6 +438,7 @@ const HospedajeCalendar = ({
               <tr>
                 <th className="border p-1 bg-gray-50 text-left min-w-[150px]" rowSpan={2}>Trabajador</th>
                 <th className="border p-1 bg-gray-50 text-left min-w-[100px]" rowSpan={2}>Cargo</th>
+                <th className="border p-1 bg-gray-50 text-left min-w-[100px]" rowSpan={2}>Faena</th>
                 {days.map(dayData => (
                   <th key={`dow-${dayData.day}-${dayData.month}`} className="border p-1 bg-gray-50 text-center min-w-[35px] text-xs">
                     {getDayOfWeek(dayData.date)}
@@ -546,6 +467,7 @@ const HospedajeCalendar = ({
                   <tr key={worker.id}>
                     <td className="border p-2 font-medium">{worker.name}</td>
                     <td className="border p-2 text-sm text-gray-600">{worker.position}</td>
+                    <td className="border p-2 text-sm text-gray-600">{worker.faena}</td>
                     {days.map(dayData => {
                       const dateStr = formatDateFromDayData(dayData);
                       const isChecked = worker.hospedaje[dateStr] || false;
@@ -555,7 +477,7 @@ const HospedajeCalendar = ({
                           <div
                             onMouseDown={() => handleMouseDown(worker.id, dateStr)}
                             onMouseEnter={() => handleMouseEnter(worker.id, dateStr)}
-                            className={`w-6 h-6 mx-auto rounded border-2 transition-colors cursor-pointer flex items-center justify-center ${
+                            className={`w-6 h-6 mx-auto rounded border-2 transition-colors cursor-pointer flex items-center justify-center ${ 
                               isChecked 
                                 ? 'bg-blue-500 border-blue-500' 
                                 : inRange
@@ -584,7 +506,7 @@ const HospedajeCalendar = ({
               })}
               {/* Fila de totales */}
               <tr className="bg-gray-100 font-bold">
-                <td className="border p-2" colSpan={2}>TOTAL POR DÍA</td>
+                <td className="border p-2" colSpan={3}>TOTAL POR DÍA</td>
                 {dayTotals.map(({ dayData, count }) => (
                   <td key={`total-${dayData.day}-${dayData.month}`} className="border p-2 text-center">
                     {count > 0 ? count : '-'}

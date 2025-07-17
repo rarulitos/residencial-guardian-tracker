@@ -1,0 +1,1 @@
+ALTER TABLE public.groups ADD COLUMN price_per_night NUMERIC(10, 2) DEFAULT 25000.00;

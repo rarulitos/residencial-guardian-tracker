@@ -28,6 +28,9 @@ const formSchema = z.object({
   endDate: z.date({
     required_error: "La fecha de fin es requerida.",
   }),
+  pricePerNight: z.coerce.number().min(0, {
+    message: "El precio unitario debe ser un número positivo.",
+  }),
 });
 
 const Index = () => {
@@ -52,6 +55,7 @@ const Index = () => {
       name: "",
       startDate: new Date(),
       endDate: new Date(),
+      pricePerNight: 25000,
     },
   });
 
@@ -104,7 +108,7 @@ const Index = () => {
       return;
     }
 
-    const newGroup = await createGroup(currentPeriod.id, values.name, values.startDate, values.endDate);
+    const newGroup = await createGroup(currentPeriod.id, values.name, values.startDate, values.endDate, values.pricePerNight);
     if (newGroup) {
       setGroups(prev => [...prev, newGroup]);
       setIsNewGroupDialogOpen(false);
@@ -118,6 +122,7 @@ const Index = () => {
       name: group.name,
       startDate: parseDateString(group.start_date),
       endDate: parseDateString(group.end_date),
+      pricePerNight: group.price_per_night || 25000,
     });
     setIsEditGroupDialogOpen(true);
   };
@@ -125,10 +130,14 @@ const Index = () => {
   const handleUpdateGroup = async (values: z.infer<typeof formSchema>) => {
     if (!editingGroup || !updateGroup) return;
 
-    const updatedGroup = await updateGroup(editingGroup.id, values.name, values.startDate, values.endDate);
+    const updatedGroupData = await updateGroup(editingGroup.id, values.name, values.startDate, values.endDate, values.pricePerNight);
 
-    if (updatedGroup) {
-      setGroups(prev => prev.map(g => g.id === editingGroup.id ? updatedGroup : g));
+    if (updatedGroupData) {
+      setGroups(prev => prev.map(g => 
+        g.id === editingGroup.id 
+          ? { ...g, ...updatedGroupData } 
+          : g
+      ));
       setIsEditGroupDialogOpen(false);
       setEditingGroup(null);
     }
@@ -362,6 +371,19 @@ const Index = () => {
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="pricePerNight"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Precio Unitario</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="Ej: 25000" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <DialogFooter>
                 <Button type="submit">Crear Agrupación</Button>
               </DialogFooter>
@@ -478,6 +500,19 @@ const Index = () => {
                         />
                       </PopoverContent>
                     </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="pricePerNight"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Precio Unitario</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="Ej: 25000" {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

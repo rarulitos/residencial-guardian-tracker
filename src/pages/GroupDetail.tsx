@@ -3,12 +3,15 @@ import { useParams, Link } from 'react-router-dom';
 import { useDatabase } from '@/hooks/useDatabase';
 import { Group, WorkerWithHospedaje } from '@/types/database';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, LogOut } from 'lucide-react';
+import { ChevronLeft, LogOut, FileDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import WorkerForm from '@/components/WorkerForm';
 import HospedajeCalendar from '@/components/HospedajeCalendar';
-import { format } from 'date-fns';
+import { format, eachDayOfInterval } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { parseDateString } from '@/lib/utils';
+import * as ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 const GroupDetail = () => {
   const { groupId } = useParams<{ groupId: string }>();
@@ -23,19 +26,19 @@ const GroupDetail = () => {
 
       const fetchedGroup = await getGroupById(groupId);
       setGroup(fetchedGroup);
-
       if (fetchedGroup) {
+        console.log(`[GroupDetail] Group state updated. pricePerNight: ${fetchedGroup.price_per_night}`);
         const fetchedWorkers = await getWorkersForGroup(groupId);
         setWorkers(fetchedWorkers);
       }
     };
 
     loadGroupData();
-  }, [groupId, user, getGroupById, getWorkersForGroup]);
+  }, [groupId, user, getGroupById, getWorkersForGroup, location.key]);
 
-  const handleAddWorker = async (name: string, position: string) => {
+  const handleAddWorker = async (name: string, position: string, faena: string) => {
     if (!groupId) return;
-    const newWorker = await addWorker(groupId, name, position);
+    const newWorker = await addWorker(groupId, name, position, faena);
     if (newWorker) {
       const updatedWorkers = await getWorkersForGroup(groupId);
       setWorkers(updatedWorkers);
@@ -91,6 +94,170 @@ const GroupDetail = () => {
     await signOut();
   };
 
+  const handleExportToExcel = async () => {
+    if (!group || workers.length === 0) {
+      alert("No hay datos para exportar.");
+      return;
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Hospedaje');
+
+    const startDate = parseDateString(group.start_date);
+    const endDate = parseDateString(group.end_date);
+    const days = eachDayOfInterval({ start: startDate, end: endDate });
+    const pricePerNight = group.price_per_night || 0;
+
+    // --- Column Definitions ---
+    const columns = [
+        { key: 'worker', header: 'Trabajador', width: 30 },
+        { key: 'position', header: 'Cargo', width: 20 },
+        { key: 'faena', header: 'Faena', width: 20 },
+        ...days.map(day => ({
+            key: format(day, 'yyyy-MM-dd'),
+            header: format(day, 'dd/MM'),
+            dayHeader: format(day, 'EEE', { locale: es }),
+            width: 7
+        })),
+        { key: 'totalDays', header: 'Total Días', width: 15 },
+    ];
+
+    // --- Double Header ---
+    const headerRow1 = worksheet.getRow(1);
+    const headerRow2 = worksheet.getRow(2);
+    headerRow1.font = { bold: true };
+    headerRow2.font = { bold: true };
+    headerRow1.alignment = { horizontal: 'center', vertical: 'middle' };
+    headerRow2.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    let currentCol = 1;
+    // Worker, Position and Faena columns
+    worksheet.mergeCells(1, currentCol, 2, currentCol);
+    worksheet.getCell(1, currentCol).value = columns[0].header;
+    worksheet.getColumn(currentCol).width = columns[0].width;
+    currentCol++;
+    
+    worksheet.mergeCells(1, currentCol, 2, currentCol);
+    worksheet.getCell(1, currentCol).value = columns[1].header;
+    worksheet.getColumn(currentCol).width = columns[1].width;
+    currentCol++;
+
+    worksheet.mergeCells(1, currentCol, 2, currentCol);
+    worksheet.getCell(1, currentCol).value = columns[2].header;
+    worksheet.getColumn(currentCol).width = columns[2].width;
+    currentCol++;
+
+    // Date columns
+    days.forEach((day, index) => {
+        const dayColIndex = index + 3; // +3 for worker, position and faena
+        worksheet.getCell(1, currentCol).value = columns[dayColIndex].dayHeader;
+        worksheet.getCell(2, currentCol).value = columns[dayColIndex].header;
+        worksheet.getColumn(currentCol).width = columns[dayColIndex].width;
+        currentCol++;
+    });
+
+    const totalDaysColNum = currentCol;
+    worksheet.mergeCells(1, totalDaysColNum, 2, totalDaysColNum);
+    worksheet.getCell(1, totalDaysColNum).value = 'Total Días';
+    worksheet.getColumn(totalDaysColNum).width = 15;
+    worksheet.getColumn(totalDaysColNum).alignment = { horizontal: 'right' };
+
+    worksheet.views = [{ state: 'frozen', xSplit: 3, ySplit: 2, activeCell: 'D3' }];
+
+    // --- Data Rows ---
+    const dataStartRow = 3;
+    workers.forEach((worker, index) => {
+        const rowNumber = dataStartRow + index;
+        const row = worksheet.getRow(rowNumber);
+        row.getCell(1).value = worker.name;
+        row.getCell(2).value = worker.position;
+        row.getCell(3).value = worker.faena;
+
+        let totalDaysCount = 0;
+        const hospedajeMap = worker.hospedaje.reduce((acc, h) => {
+            acc[h.date] = h.has_hospedaje;
+            return acc;
+        }, {} as { [date: string]: boolean });
+
+        days.forEach((day, dayIndex) => {
+            const dateKey = format(day, 'yyyy-MM-dd');
+            if (hospedajeMap[dateKey]) {
+                const cell = row.getCell(dayIndex + 4); // +4 for worker, position, faena
+                cell.value = '✓';
+                cell.alignment = { horizontal: 'center' };
+                totalDaysCount++;
+            }
+        });
+
+        row.getCell(totalDaysColNum).value = totalDaysCount;
+    });
+
+    // --- Totals Row ---
+    const totalRow = worksheet.getRow(dataStartRow + workers.length);
+    totalRow.font = { bold: true };
+    totalRow.getCell(1).value = 'Total por día';
+    worksheet.mergeCells(totalRow.number, 1, totalRow.number, 3);
+    totalRow.getCell(1).alignment = { horizontal: 'right' };
+
+    let totalOfTotals = 0;
+    days.forEach((day, dayIndex) => {
+        const dateKey = format(day, 'yyyy-MM-dd');
+        const dailyTotal = workers.reduce((sum, worker) => {
+            const hospedajeMap = worker.hospedaje.reduce((acc, h) => {
+                acc[h.date] = h.has_hospedaje;
+                return acc;
+            }, {} as { [date: string]: boolean });
+            return sum + (hospedajeMap[dateKey] ? 1 : 0);
+        }, 0);
+        totalRow.getCell(dayIndex + 4).value = dailyTotal;
+        totalOfTotals += dailyTotal;
+    });
+    totalRow.getCell(totalDaysColNum).value = totalOfTotals;
+
+    // --- Summary Section ---
+    const summaryStartRow = dataStartRow + workers.length + 2;
+    const labelColNum = totalDaysColNum - 1;
+    const valueColNum = totalDaysColNum;
+
+    const totalDaysSumAddress = totalRow.getCell(totalDaysColNum).address;
+    const pricePerNightCellAddress = `${worksheet.getColumn(valueColNum).letter}${summaryStartRow + 1}`;
+    const totalNetoCellAddress = `${worksheet.getColumn(valueColNum).letter}${summaryStartRow + 2}`;
+    const ivaCellAddress = `${worksheet.getColumn(valueColNum).letter}${summaryStartRow + 3}`;
+    const totalToPayCellAddress = `${worksheet.getColumn(valueColNum).letter}${summaryStartRow + 4}`;
+
+    const summaryData = [
+        { label: 'Total días hospedaje:', formula: totalDaysSumAddress, format: '#,##0' },
+        { label: 'Precio unitario:', value: pricePerNight, format: '"$"#,##0.00' },
+        
+        { label: 'Total neto:', formula: `${totalDaysSumAddress}*${pricePerNightCellAddress}`, format: '"$"#,##0.00' },
+        { label: 'IVA (19%):', formula: `${totalNetoCellAddress}*0.19`, format: '"$"#,##0.00' },
+        { label: 'Total a pagar:', formula: `${totalNetoCellAddress}+${ivaCellAddress}`, format: '"$"#,##0.00', isBold: true }
+    ];
+
+    summaryData.forEach((item, index) => {
+        const row = worksheet.getRow(summaryStartRow + index);
+        
+        const labelCell = row.getCell(labelColNum);
+        labelCell.value = item.label;
+        labelCell.alignment = { horizontal: 'right' };
+        labelCell.font = { bold: item.isBold || false };
+
+        const valueCell = row.getCell(valueColNum);
+        if (item.formula) {
+            valueCell.value = { formula: item.formula };
+        } else {
+            valueCell.value = item.value;
+        }
+        valueCell.numFmt = item.format;
+        valueCell.font = { bold: item.isBold || false };
+    });
+
+    // --- Save File ---
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    saveAs(blob, `Hospedaje_${group.name.replace(/ /g, '_')}_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
@@ -124,6 +291,7 @@ const GroupDetail = () => {
     id: worker.id,
     name: worker.name,
     position: worker.position,
+    faena: worker.faena,
     hospedaje: worker.hospedaje.reduce((acc, h) => {
       acc[h.date] = h.has_hospedaje;
       return acc;
@@ -151,12 +319,18 @@ const GroupDetail = () => {
         </div>
 
         <div className="mb-4 flex items-center justify-between">
-          <Link to="/">
-            <Button variant="outline" className="flex items-center gap-2">
-              <ChevronLeft className="h-4 w-4" />
-              Volver a Período
-            </Button>
-          </Link>
+            <div className="flex items-center gap-2">
+                <Link to="/">
+                    <Button variant="outline" className="flex items-center gap-2">
+                    <ChevronLeft className="h-4 w-4" />
+                    Volver a Período
+                    </Button>
+                </Link>
+                <Button onClick={handleExportToExcel} variant="secondary" className="flex items-center gap-2">
+                    <FileDown className="h-4 w-4" />
+                    Exportar a Excel
+                </Button>
+            </div>
           <div>
             <h2 className="text-xl font-semibold">Agrupación: {group.name}</h2>
             <p className="text-gray-600 text-sm">

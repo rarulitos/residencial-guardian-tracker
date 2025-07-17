@@ -73,8 +73,7 @@ export const useDatabase = () => {
             worker_hospedaje (*)
           )
         `)
-        .eq('billing_period_id', billingPeriodId)
-        .eq('user_id', user.id);
+        .eq('billing_period_id', billingPeriodId);
 
       if (error) throw error;
       
@@ -89,15 +88,16 @@ export const useDatabase = () => {
 
   const getGroupById = useCallback(async (groupId: string): Promise<Group | null> => {
     if (!user) return null;
+    console.log(`[getGroupById] Attempting to fetch group ${groupId}`);
     try {
       const { data: group, error } = await supabase
         .from('groups')
         .select('*')
         .eq('id', groupId)
-        .eq('user_id', user.id)
         .single();
 
       if (error) throw error;
+      console.log(`[getGroupById] Successfully fetched group. price_per_night: ${group?.price_per_night}`);
       return group;
     } catch (error) {
       console.error('Error getting group by ID:', error);
@@ -105,17 +105,17 @@ export const useDatabase = () => {
     }
   }, [user]);
 
-  const createGroup = useCallback(async (billingPeriodId: string, name: string, startDate: Date, endDate: Date): Promise<Group | null> => {
+  const createGroup = useCallback(async (billingPeriodId: string, name: string, startDate: Date, endDate: Date, pricePerNight: number): Promise<Group | null> => {
     if (!user) return null;
     try {
       const { data, error } = await supabase
         .from('groups')
         .insert({
-          user_id: user.id,
           billing_period_id: billingPeriodId,
           name,
           start_date: toYYYYMMDD(startDate),
           end_date: toYYYYMMDD(endDate),
+          price_per_night: pricePerNight,
         })
         .select()
         .single();
@@ -128,8 +128,9 @@ export const useDatabase = () => {
     }
   }, [user]);
 
-  const updateGroup = useCallback(async (groupId: string, name: string, startDate: Date, endDate: Date): Promise<Group | null> => {
+  const updateGroup = useCallback(async (groupId: string, name: string, startDate: Date, endDate: Date, pricePerNight: number): Promise<Group | null> => {
     if (!user) return null;
+    console.log(`[updateGroup] Attempting to update group ${groupId} with pricePerNight: ${pricePerNight}`);
     try {
       const { data, error } = await supabase
         .from('groups')
@@ -137,13 +138,14 @@ export const useDatabase = () => {
           name,
           start_date: toYYYYMMDD(startDate),
           end_date: toYYYYMMDD(endDate),
+          price_per_night: pricePerNight,
         })
         .eq('id', groupId)
-        .eq('user_id', user.id)
         .select()
         .single();
 
       if (error) throw error;
+      console.log(`[updateGroup] Successfully updated group. Returned data price_per_night: ${data?.price_per_night}`);
       return data;
     } catch (error) {
       console.error('Error updating group:', error);
@@ -185,17 +187,18 @@ export const useDatabase = () => {
     }
   }, [user]);
 
-  const addWorker = useCallback(async (groupId: string, name: string, position: string): Promise<Worker | null> => {
+  const addWorker = useCallback(async (groupId: string, name: string, position: string, faena: string): Promise<Worker | null> => {
     if (!user) return null;
     try {
       const { data: group } = await supabase.from('groups').select('billing_period_id').eq('id', groupId).single();
       if (!group) throw new Error("Group not found");
 
-      const { data: canonicalWorker } = await supabase.from('workers').select('name, position').eq('user_id', user.id).ilike('name', name).ilike('position', position).limit(1).maybeSingle();
+      const { data: canonicalWorker } = await supabase.from('workers').select('name, position, faena').eq('user_id', user.id).ilike('name', name).ilike('position', position).ilike('faena', faena).limit(1).maybeSingle();
       const canonicalName = canonicalWorker ? canonicalWorker.name : name;
       const canonicalPosition = canonicalWorker ? canonicalWorker.position : position;
+      const canonicalFaena = canonicalWorker ? canonicalWorker.faena : faena;
 
-      const { data: workerInGroup } = await supabase.from('workers').select('*').eq('user_id', user.id).eq('group_id', groupId).eq('name', canonicalName).eq('position', canonicalPosition).maybeSingle();
+      const { data: workerInGroup } = await supabase.from('workers').select('*').eq('user_id', user.id).eq('group_id', groupId).eq('name', canonicalName).eq('position', canonicalPosition).eq('faena', canonicalFaena).maybeSingle();
       if (workerInGroup) return workerInGroup;
 
       const { data, error } = await supabase
@@ -205,7 +208,8 @@ export const useDatabase = () => {
           group_id: groupId,
           billing_period_id: group.billing_period_id,
           name: canonicalName,
-          position: canonicalPosition
+          position: canonicalPosition,
+          faena: canonicalFaena
         })
         .select()
         .single();
