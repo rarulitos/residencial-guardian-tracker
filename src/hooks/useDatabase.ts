@@ -132,17 +132,12 @@ export const useDatabase = () => {
     }
   }, [user]);
 
-  const updateGroup = useCallback(async (groupId: string, name: string, startDate: Date, endDate: Date, pricePerNight: number): Promise<Group | null> => {
+  const updateGroup = useCallback(async (groupId: string, updatedGroup: Partial<Group>): Promise<Group | null> => {
     if (!user) return null;
     try {
       const { data, error } = await supabase
         .from('groups')
-        .update({
-          name,
-          start_date: toYYYYMMDD(startDate),
-          end_date: toYYYYMMDD(endDate),
-          price_per_night: pricePerNight,
-        })
+        .update(updatedGroup)
         .eq('id', groupId)
         .select()
         .single();
@@ -224,6 +219,24 @@ export const useDatabase = () => {
     }
   }, [user]);
 
+  const updateWorker = useCallback(async (workerId: string, updates: Partial<Worker>): Promise<Worker | null> => {
+    if (!user) return null;
+    try {
+      const { data, error } = await supabase
+        .from('workers')
+        .update(updates)
+        .eq('id', workerId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error updating worker:', error);
+      return null;
+    }
+  }, [user]);
+
   const deleteWorker = useCallback(async (workerId: string): Promise<boolean> => {
     try {
       const { error } = await supabase.from('workers').delete().eq('id', workerId);
@@ -246,6 +259,24 @@ export const useDatabase = () => {
     }
   }, []);
 
+  const bulkToggleHospedaje = useCallback(async (workerId: string, dates: string[], select: boolean): Promise<boolean> => {
+    try {
+      const updates = dates.map(date => ({
+        worker_id: workerId,
+        date,
+        has_hospedaje: select
+      }));
+
+      const { error } = await supabase.from('worker_hospedaje').upsert(updates, { onConflict: 'worker_id, date' });
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error bulk toggling hospedaje:', error);
+      return false;
+    }
+  }, []);
+
   const toggleHospedaje = useCallback(async (workerId: string, date: string): Promise<boolean> => {
     try {
       const { data: existing } = await supabase.from('worker_hospedaje').select('*').eq('worker_id', workerId).eq('date', date).maybeSingle();
@@ -264,6 +295,25 @@ export const useDatabase = () => {
     }
   }, []);
 
+  const bulkUpdateHospedaje = useCallback(async (changes: Record<string, boolean>): Promise<boolean> => {
+    try {
+      const updates = Object.entries(changes).map(([key, has_hospedaje]) => {
+        const [worker_id, date] = key.split('|');
+        return { worker_id, date, has_hospedaje };
+      });
+
+      if (updates.length === 0) return true;
+
+      const { error } = await supabase.from('worker_hospedaje').upsert(updates, { onConflict: 'worker_id, date' });
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error bulk updating hospedaje:', error);
+      return false;
+    }
+  }, []);
+
   return {
     loading,
     createOrGetBillingPeriod,
@@ -273,8 +323,11 @@ export const useDatabase = () => {
     updateGroup,
     getWorkersForGroup,
     addWorker,
+    updateWorker, // Add this line
     deleteWorker,
     deleteGroup,
     toggleHospedaje,
+    bulkToggleHospedaje,
+    bulkUpdateHospedaje,
   };
 };

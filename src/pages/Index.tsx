@@ -27,6 +27,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn, parseDateString } from '@/lib/utils';
+import { useToast } from "@/components/ui/use-toast";
+import GroupEditDialog from '@/components/GroupEditDialog';
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -44,6 +46,7 @@ const formSchema = z.object({
 });
 
 const Index = () => {
+  const { toast } = useToast();
   const { user, signOut } = useAuth();
   const { createOrGetBillingPeriod, getGroupsForPeriod, createGroup, updateGroup, deleteGroup, loading } = useDatabase();
   const [currentPeriod, setCurrentPeriod] = useState<BillingPeriod | null>(null);
@@ -145,10 +148,10 @@ const Index = () => {
     setIsEditGroupDialogOpen(true);
   };
 
-  const handleUpdateGroup = async (values: z.infer<typeof formSchema>) => {
-    if (!editingGroup || !updateGroup) return;
+  const handleUpdateGroup = async (updatedGroup: Partial<Group>) => {
+    if (!editingGroup) return;
 
-    const updatedGroupData = await updateGroup(editingGroup.id, values.name, values.startDate, values.endDate, values.pricePerNight);
+    const updatedGroupData = await updateGroup(editingGroup.id, updatedGroup);
 
     if (updatedGroupData) {
       setGroups(prev => prev.map(g => 
@@ -158,6 +161,7 @@ const Index = () => {
       ));
       setIsEditGroupDialogOpen(false);
       setEditingGroup(null);
+      toast({ title: "Agrupación actualizada", description: "Los datos de la agrupación han sido actualizados." });
     }
   };
 
@@ -436,137 +440,12 @@ const Index = () => {
       </Dialog>
 
       {/* Edit Group Dialog */}
-      <Dialog open={isEditGroupDialogOpen} onOpenChange={setIsEditGroupDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Editar Agrupación</DialogTitle>
-            <DialogDescription>
-              Modifica el nombre y el rango de fechas de la agrupación.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleUpdateGroup)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre de la Agrupación</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej: Cima Camino 1" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="startDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Fecha de Inicio</FormLabel>
-                    <Popover open={isEditStartDateOpen} onOpenChange={setIsEditStartDateOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-full pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP", { locale: es })
-                            ) : (
-                              <span>Selecciona una fecha</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={(date) => {
-                            if (date) field.onChange(date);
-                            setIsEditStartDateOpen(false);
-                          }}
-                          defaultMonth={field.value}
-                          initialFocus
-                          locale={es}
-                          weekStartsOn={1}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="endDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Fecha de Fin</FormLabel>
-                    <Popover open={isEditEndDateOpen} onOpenChange={setIsEditEndDateOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-full pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP", { locale: es })
-                            ) : (
-                              <span>Selecciona una fecha</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={(date) => {
-                            if (date) field.onChange(date);
-                            setIsEditEndDateOpen(false);
-                          }}
-                          defaultMonth={field.value}
-                          initialFocus
-                          locale={es}
-                          weekStartsOn={1}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="pricePerNight"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Precio Unitario</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="Ej: 25000" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <DialogFooter>
-                <Button type="submit">Guardar Cambios</Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <GroupEditDialog
+        group={editingGroup}
+        isOpen={isEditGroupDialogOpen}
+        onClose={() => setIsEditGroupDialogOpen(false)}
+        onSave={handleUpdateGroup}
+      />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

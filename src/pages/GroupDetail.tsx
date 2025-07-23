@@ -1,24 +1,224 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDatabase } from '@/hooks/useDatabase';
-import { Group, WorkerWithHospedaje } from '@/types/database';
+import { Group, Worker, WorkerWithHospedaje } from '@/types/database';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, LogOut, FileDown } from 'lucide-react';
+import { useToast } from "@/components/ui/use-toast";
+import { ChevronLeft, FileDown, Settings, Loader2, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import WorkerForm from '@/components/WorkerForm';
 import HospedajeCalendar from '@/components/HospedajeCalendar';
-import { format, eachDayOfInterval } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { parseDateString } from '@/lib/utils';
-import * as ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
+import { format } from 'date-fns';
+import { exportToExcel } from '@/lib/excel-export';
+import { parseDateString, cn } from '@/lib/utils';
+import GroupEditDialog from '@/components/GroupEditDialog';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+const SaveStatusIndicator = ({ status }: { status: SaveStatus }) => {
+  if (status === 'saving') {
+    return (
+      <div className="flex items-center text-sm text-gray-500">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        Guardando...
+      </div>
+    );
+  }
+  if (status === 'saved') {
+    return (
+      <div className="flex items-center text-sm text-green-600">
+        <CheckCircle className="mr-2 h-4 w-4" />
+        Guardado
+      </div>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <div className="flex items-center text-sm text-red-600">
+        Error al guardar. Se restauró el estado anterior.
+      </div>
+    );
+  }
+  return <span>Selecciona los días de hospedaje para cada trabajador.</span>;
+};
+
+
+const FinancialSummary = ({ workers, pricePerNight }: { workers: WorkerWithHospedaje[], pricePerNight: number }) => {
+  const totalNights = useMemo(() => {
+    return workers.reduce((total, worker) => {
+      return total + worker.hospedaje.filter(h => h.has_hospedaje).length;
+    }, 0);
+  }, [workers]);
+
+  const totalPrice = totalNights * pricePerNight;
+  const iva = totalPrice * 0.19;
+  const totalWithIva = totalPrice + iva;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Resumen Financiero</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+          <div className="p-3 bg-gray-50 rounded-md border">
+            <p className="text-sm text-gray-500">Total Días/Noches</p>
+            <p className="text-xl font-bold text-primary">{totalNights}</p>
+          </div>
+          <div className="p-3 bg-gray-50 rounded-md border">
+            <p className="text-sm text-gray-500">Total Neto</p>
+            <p className="text-xl font-bold text-primary">{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(totalPrice)}</p>
+          </div>
+          <div className="p-3 bg-gray-50 rounded-md border">
+            <p className="text-sm text-gray-500">IVA (19%)</p>
+            <p className="text-xl font-bold text-primary">{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(iva)}</p>
+          </div>
+          <div className="p-3 bg-gray-50 rounded-md border">
+            <p className="text-sm text-gray-500">Total a Pagar</p>
+            <p className="text-xl font-bold text-green-600">{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(totalWithIva)}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 const GroupDetail = () => {
   const { groupId } = useParams<{ groupId: string }>();
-  const { user, signOut } = useAuth();
-  const { getGroupById, getWorkersForGroup, addWorker, deleteWorker, toggleHospedaje, loading } = useDatabase();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const { 
+    getGroupById, 
+    getWorkersForGroup, 
+    addWorker, 
+    deleteWorker, 
+    bulkToggleHospedaje, 
+    bulkUpdateHospedaje,
+    updateGroup, 
+    loading 
+  } = useDatabase();
+  
   const [group, setGroup] = useState<Group | null>(null);
   const [workers, setWorkers] = useState<WorkerWithHospedaje[]>([]);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [workerToDelete, setWorkerToDelete] = useState<Worker | null>(null);
+  
+  const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const statusResetTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const originalWorkersRef = useRef<WorkerWithHospedaje[]>([]);
+
+  const loadGroupData = useCallback(async () => {
+    if (!groupId || !user) return;
+    const fetchedGroup = await getGroupById(groupId);
+    setGroup(fetchedGroup);
+    if (fetchedGroup) {
+      const fetchedWorkers = await getWorkersForGroup(groupId);
+      setWorkers(fetchedWorkers);
+      originalWorkersRef.current = JSON.parse(JSON.stringify(fetchedWorkers));
+    }
+  }, [groupId, user, getGroupById, getWorkersForGroup]);
+
+  useEffect(() => {
+    loadGroupData();
+  }, [loadGroupData]);
+
+  const savePendingChanges = useCallback(async () => {
+    if (Object.keys(pendingChanges).length === 0) return;
+
+    setSaveStatus('saving');
+    const changesToSave = { ...pendingChanges };
+    setPendingChanges({});
+
+    const success = await bulkUpdateHospedaje(changesToSave);
+    if (success) {
+      setSaveStatus('saved');
+      originalWorkersRef.current = JSON.parse(JSON.stringify(workers));
+    } else {
+      setSaveStatus('error');
+      toast({
+        title: "Error al guardar",
+        description: "No se pudieron guardar los cambios. Se restauró el estado anterior.",
+        variant: "destructive",
+      });
+      setWorkers(originalWorkersRef.current);
+    }
+  }, [pendingChanges, bulkUpdateHospedaje, toast, workers]);
+
+  // Debounce effect
+  useEffect(() => {
+    if (Object.keys(pendingChanges).length > 0) {
+      setSaveStatus('idle'); // Reset status if user starts typing again
+      if (statusResetTimerRef.current) clearTimeout(statusResetTimerRef.current);
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      
+      debounceTimerRef.current = setTimeout(() => {
+        savePendingChanges();
+      }, 2000);
+    }
+
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [pendingChanges, savePendingChanges]);
+
+  // Effect to reset 'saved' or 'error' status to 'idle'
+  useEffect(() => {
+    if (saveStatus === 'saved' || saveStatus === 'error') {
+      if (statusResetTimerRef.current) clearTimeout(statusResetTimerRef.current);
+      statusResetTimerRef.current = setTimeout(() => {
+        setSaveStatus('idle');
+      }, 3000);
+    }
+    return () => {
+      if (statusResetTimerRef.current) clearTimeout(statusResetTimerRef.current);
+    }
+  }, [saveStatus]);
+
+  // Save on unmount
+  useEffect(() => {
+    return () => {
+      savePendingChanges();
+    };
+  }, [savePendingChanges]);
+
+  const handleToggleHospedaje = (workerId: string, date: string) => {
+    const worker = workers.find(w => w.id === workerId);
+    if (!worker) return;
+
+    const hospedajeEntry = worker.hospedaje.find(h => h.date === date);
+    const currentStatus = hospedajeEntry ? hospedajeEntry.has_hospedaje : false;
+    const newStatus = !currentStatus;
+
+    setWorkers(prevWorkers =>
+      prevWorkers.map(w => w.id === workerId ? {
+        ...w,
+        hospedaje: w.hospedaje.find(h => h.date === date)
+          ? w.hospedaje.map(h => h.date === date ? { ...h, has_hospedaje: newStatus } : h)
+          : [...w.hospedaje, { id: '', worker_id: workerId, date, has_hospedaje: newStatus }]
+      } : w)
+    );
+
+    const changeKey = `${workerId}|${date}`;
+    setPendingChanges(prev => ({ ...prev, [changeKey]: newStatus }));
+  };
 
   const currentWorkersForCalendar = useMemo(() => workers.map(worker => ({
     id: worker.id,
@@ -31,271 +231,62 @@ const GroupDetail = () => {
     }, {} as { [date: string]: boolean }),
   })), [workers]);
 
-  useEffect(() => {
-    const loadGroupData = async () => {
-      if (!groupId || !user) return;
-
-      const fetchedGroup = await getGroupById(groupId);
-      setGroup(fetchedGroup);
-      if (fetchedGroup) {
-        const fetchedWorkers = await getWorkersForGroup(groupId);
-        setWorkers(fetchedWorkers);
-      }
-    };
-
-    loadGroupData();
-  }, [groupId, user, getGroupById, getWorkersForGroup, location.key]);
-
   const handleAddWorker = async (name: string, position: string, faena: string) => {
     if (!groupId) return;
+    await savePendingChanges();
     const newWorker = await addWorker(groupId, name, position, faena);
     if (newWorker) {
-      const updatedWorkers = await getWorkersForGroup(groupId);
-      setWorkers(updatedWorkers);
+      await loadGroupData();
+      toast({ title: "Trabajador agregado", description: `El trabajador ${newWorker.name} ha sido agregado.` });
     }
   };
 
-  const handleDeleteWorker = async (workerId: string) => {
-    if (!groupId) return;
-    const success = await deleteWorker(workerId);
+  const handleDeleteWorker = async () => {
+    if (!workerToDelete || !groupId) return;
+    await savePendingChanges();
+    const success = await deleteWorker(workerToDelete.id);
     if (success) {
-      const updatedWorkers = await getWorkersForGroup(groupId);
-      setWorkers(updatedWorkers);
+      await loadGroupData();
+      toast({ title: "Trabajador eliminado", description: `El trabajador ${workerToDelete.name} ha sido eliminado.` });
+    }
+    setWorkerToDelete(null);
+  };
+
+  const handleBulkToggleHospedaje = async (workerId: string, dates: string[], select: boolean) => {
+    if (!groupId) return;
+    await savePendingChanges();
+    await bulkToggleHospedaje(workerId, dates, select);
+    await loadGroupData();
+  };
+
+  const handleUpdateGroup = async (updatedGroup: Partial<Group>) => {
+    if (!groupId) return;
+    await savePendingChanges();
+    // The 'updateGroup' function from useDatabase might need to be adjusted
+    // if it strictly expects certain types, but here we cast to Partial<Group>
+    const success = await updateGroup(groupId, updatedGroup as Partial<Group>);
+    if (success) {
+      const fetchedGroup = await getGroupById(groupId);
+      setGroup(fetchedGroup);
+      toast({ title: "Agrupación actualizada", description: "Los datos de la agrupación han sido actualizados." });
+      setIsEditDialogOpen(false);
     }
   };
 
-  const handleToggleHospedaje = async (workerId: string, date: string) => {
-    // Optimistic update
-    setWorkers(prevWorkers =>
-      prevWorkers.map(worker => {
-        if (worker.id === workerId) {
-          const newHospedaje = [...worker.hospedaje];
-          const hospedajeIndex = newHospedaje.findIndex(h => h.date === date);
-
-          if (hospedajeIndex > -1) {
-            newHospedaje[hospedajeIndex] = {
-              ...newHospedaje[hospedajeIndex],
-              has_hospedaje: !newHospedaje[hospedajeIndex].has_hospedaje
-            };
-          } else {
-            newHospedaje.push({
-              id: `temp-${Date.now()}`,
-              worker_id: workerId,
-              date,
-              has_hospedaje: true
-            });
-          }
-
-          return { ...worker, hospedaje: newHospedaje };
-        }
-        return worker;
-      })
-    );
-
-    toggleHospedaje(workerId, date).then(success => {
-      console.log(`[GroupDetail] toggleHospedaje success: ${success}`);
-      if (success && groupId) {
-        getWorkersForGroup(groupId).then(updatedWorkers => {
-          setWorkers(updatedWorkers);
-          console.log('[GroupDetail] Workers re-fetched after toggle:', updatedWorkers);
-        });
-      }
-    }).catch(error => {
-      console.error("Failed to update hospedaje:", error);
-      if (groupId) {
-        getWorkersForGroup(groupId).then(setWorkers);
-      }
-    });
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-  };
-
-  const handleExportToExcel = async () => {
-    if (!group || workers.length === 0) {
-      alert("No hay datos para exportar.");
-      return;
-    }
-
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Hospedaje');
-
-    const startDate = parseDateString(group.start_date);
-    const endDate = parseDateString(group.end_date);
-    const days = eachDayOfInterval({ start: startDate, end: endDate });
-    const pricePerNight = group.price_per_night || 0;
-
-    // --- Column Definitions ---
-    const columns = [
-        { key: 'worker', header: 'Trabajador', width: 30 },
-        { key: 'position', header: 'Cargo', width: 20 },
-        { key: 'faena', header: 'Faena', width: 20 },
-        ...days.map(day => ({
-            key: format(day, 'yyyy-MM-dd'),
-            header: format(day, 'dd/MM'),
-            dayHeader: format(day, 'EEE', { locale: es }),
-            width: 7
-        })),
-        { key: 'totalDays', header: 'Total Días', width: 15 },
-    ];
-
-    // --- Double Header ---
-    const headerRow1 = worksheet.getRow(1);
-    const headerRow2 = worksheet.getRow(2);
-    headerRow1.font = { bold: true };
-    headerRow2.font = { bold: true };
-    headerRow1.alignment = { horizontal: 'center', vertical: 'middle' };
-    headerRow2.alignment = { horizontal: 'center', vertical: 'middle' };
-
-    let currentCol = 1;
-    // Worker, Position and Faena columns
-    worksheet.mergeCells(1, currentCol, 2, currentCol);
-    worksheet.getCell(1, currentCol).value = columns[0].header;
-    worksheet.getColumn(currentCol).width = columns[0].width;
-    currentCol++;
-    
-    worksheet.mergeCells(1, currentCol, 2, currentCol);
-    worksheet.getCell(1, currentCol).value = columns[1].header;
-    worksheet.getColumn(currentCol).width = columns[1].width;
-    currentCol++;
-
-    worksheet.mergeCells(1, currentCol, 2, currentCol);
-    worksheet.getCell(1, currentCol).value = columns[2].header;
-    worksheet.getColumn(currentCol).width = columns[2].width;
-    currentCol++;
-
-    // Date columns
-    days.forEach((day, index) => {
-        const dayColIndex = index + 3; // +3 for worker, position and faena
-        worksheet.getCell(1, currentCol).value = columns[dayColIndex].dayHeader;
-        worksheet.getCell(2, currentCol).value = columns[dayColIndex].header;
-        worksheet.getColumn(currentCol).width = columns[dayColIndex].width;
-        currentCol++;
-    });
-
-    const totalDaysColNum = currentCol;
-    worksheet.mergeCells(1, totalDaysColNum, 2, totalDaysColNum);
-    worksheet.getCell(1, totalDaysColNum).value = 'Total Días';
-    worksheet.getColumn(totalDaysColNum).width = 15;
-    worksheet.getColumn(totalDaysColNum).alignment = { horizontal: 'right' };
-
-    worksheet.views = [{ state: 'frozen', xSplit: 3, ySplit: 2, activeCell: 'D3' }];
-
-    // --- Data Rows ---
-    const dataStartRow = 3;
-    workers.forEach((worker, index) => {
-        const rowNumber = dataStartRow + index;
-        const row = worksheet.getRow(rowNumber);
-        row.getCell(1).value = worker.name;
-        row.getCell(2).value = worker.position;
-        row.getCell(3).value = worker.faena;
-
-        let totalDaysCount = 0;
-        const hospedajeMap = worker.hospedaje.reduce((acc, h) => {
-            acc[h.date] = h.has_hospedaje;
-            return acc;
-        }, {} as { [date: string]: boolean });
-
-        days.forEach((day, dayIndex) => {
-            const dateKey = format(day, 'yyyy-MM-dd');
-            if (hospedajeMap[dateKey]) {
-                const cell = row.getCell(dayIndex + 4); // +4 for worker, position, faena
-                cell.value = '✓';
-                cell.alignment = { horizontal: 'center' };
-                totalDaysCount++;
-            }
-        });
-
-        row.getCell(totalDaysColNum).value = totalDaysCount;
-    });
-
-    // --- Totals Row ---
-    const totalRow = worksheet.getRow(dataStartRow + workers.length);
-    totalRow.font = { bold: true };
-    totalRow.getCell(1).value = 'Total por día';
-    worksheet.mergeCells(totalRow.number, 1, totalRow.number, 3);
-    totalRow.getCell(1).alignment = { horizontal: 'right' };
-
-    let totalOfTotals = 0;
-    days.forEach((day, dayIndex) => {
-        const dateKey = format(day, 'yyyy-MM-dd');
-        const dailyTotal = workers.reduce((sum, worker) => {
-            const hospedajeMap = worker.hospedaje.reduce((acc, h) => {
-                acc[h.date] = h.has_hospedaje;
-                return acc;
-            }, {} as { [date: string]: boolean });
-            return sum + (hospedajeMap[dateKey] ? 1 : 0);
-        }, 0);
-        totalRow.getCell(dayIndex + 4).value = dailyTotal;
-        totalOfTotals += dailyTotal;
-    });
-    totalRow.getCell(totalDaysColNum).value = totalOfTotals;
-
-    // --- Summary Section ---
-    const summaryStartRow = dataStartRow + workers.length + 2;
-    const labelColNum = totalDaysColNum - 1;
-    const valueColNum = totalDaysColNum;
-
-    const totalDaysSumAddress = totalRow.getCell(totalDaysColNum).address;
-    const pricePerNightCellAddress = `${worksheet.getColumn(valueColNum).letter}${summaryStartRow + 1}`;
-    const totalNetoCellAddress = `${worksheet.getColumn(valueColNum).letter}${summaryStartRow + 2}`;
-    const ivaCellAddress = `${worksheet.getColumn(valueColNum).letter}${summaryStartRow + 3}`;
-    const totalToPayCellAddress = `${worksheet.getColumn(valueColNum).letter}${summaryStartRow + 4}`;
-
-    const summaryData = [
-        { label: 'Total días hospedaje:', formula: totalDaysSumAddress, format: '#,##0' },
-        { label: 'Precio unitario:', value: pricePerNight, format: '"$"#,##0.00' },
-        
-        { label: 'Total neto:', formula: `${totalDaysSumAddress}*${pricePerNightCellAddress}`, format: '"$"#,##0.00' },
-        { label: 'IVA (19%):', formula: `${totalNetoCellAddress}*0.19`, format: '"$"#,##0.00' },
-        { label: 'Total a pagar:', formula: `${totalNetoCellAddress}+${ivaCellAddress}`, format: '"$"#,##0.00', isBold: true }
-    ];
-
-    summaryData.forEach((item, index) => {
-        const row = worksheet.getRow(summaryStartRow + index);
-        
-        const labelCell = row.getCell(labelColNum);
-        labelCell.value = item.label;
-        labelCell.alignment = { horizontal: 'right' };
-        labelCell.font = { bold: item.isBold || false };
-
-        const valueCell = row.getCell(valueColNum);
-        if (item.formula) {
-            valueCell.value = { formula: item.formula };
-        } else {
-            valueCell.value = item.value;
-        }
-        valueCell.numFmt = item.format;
-        valueCell.font = { bold: item.isBold || false };
-    });
-
-    // --- Save File ---
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    saveAs(blob, `Hospedaje_${group.name.replace(/ /g, '_')}_${format(new Date(), 'yyyyMMdd')}.xlsx`);
-  };
-
-  if (loading) {
+  if (loading && !group) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="text-gray-500 mt-4">Cargando detalles de la agrupación...</p>
-        </div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
       </div>
     );
   }
 
   if (!group) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
-        <div className="text-center text-gray-600">
+      <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center text-center">
+        <div>
           <h1 className="text-2xl font-bold mb-2">Agrupación no encontrada</h1>
-          <p>La agrupación con ID "{groupId}" no existe o no tienes permiso para verla.</p>
-          <Link to="/">
-            <Button className="mt-4">Volver al Inicio</Button>
-          </Link>
+          <Link to="/"><Button className="mt-4">Volver a Períodos</Button></Link>
         </div>
       </div>
     );
@@ -307,67 +298,80 @@ const GroupDetail = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                Control de Hospedaje de Trabajadores
-              </h1>
-              <p className="text-gray-600">
-                Bienvenido, {user?.email}
-              </p>
-            </div>
-            <Button onClick={handleSignOut} variant="outline" className="flex items-center gap-2">
-              <LogOut className="h-4 w-4" />
-              Cerrar Sesión
-            </Button>
-          </div>
-        </div>
-
-        <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-                <Link to="/">
-                    <Button variant="outline" className="flex items-center gap-2">
-                    <ChevronLeft className="h-4 w-4" />
-                    Volver a Período
-                    </Button>
-                </Link>
-                <Button onClick={handleExportToExcel} variant="secondary" className="flex items-center gap-2">
-                    <FileDown className="h-4 w-4" />
-                    Exportar a Excel
-                </Button>
-            </div>
+      <div className="max-w-7xl mx-auto space-y-6">
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-xl font-semibold">Agrupación: {group.name}</h2>
-            <p className="text-gray-600 text-sm">
+            <Link to="/" className="text-sm text-gray-500 hover:underline flex items-center gap-1 mb-2">
+              <ChevronLeft className="h-4 w-4" />
+              Volver a Períodos
+            </Link>
+            <h1 className="text-3xl font-bold text-gray-900">{group.name}</h1>
+            <p className="text-gray-600">
               Período: {format(startDate, 'dd/MM/yyyy')} - {format(endDate, 'dd/MM/yyyy')}
             </p>
           </div>
-        </div>
-
-        <WorkerForm onAddWorker={handleAddWorker} />
-
-        {currentWorkersForCalendar.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
-            <p className="text-gray-500 text-lg">
-              No hay trabajadores agregados a esta agrupación.
-            </p>
-            <p className="text-gray-400 text-sm mt-2">
-              Agrega trabajadores usando el formulario de arriba.
-            </p>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => exportToExcel(group, workers)}>
+              <FileDown className="h-4 w-4 mr-2" />
+              Exportar a Excel
+            </Button>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
+              <Settings className="h-4 w-4 mr-2" />
+              Editar
+            </Button>
           </div>
-        ) : (
-          <HospedajeCalendar
-            workers={currentWorkersForCalendar}
-            currentMonth={currentMonth}
-            startDate={startDate}
-            endDate={endDate}
-            onToggleHospedaje={handleToggleHospedaje}
-            onDeleteWorker={handleDeleteWorker}
-            groupPricePerNight={group.price_per_night || 0}
-          />
+        </header>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Calendario de Hospedaje</CardTitle>
+            <CardDescription>
+              <SaveStatusIndicator status={saveStatus} />
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <HospedajeCalendar
+              workers={currentWorkersForCalendar}
+              currentMonth={currentMonth}
+              startDate={startDate}
+              endDate={endDate}
+              onToggleHospedaje={handleToggleHospedaje}
+              onBulkToggleHospedaje={handleBulkToggleHospedaje}
+              onAddWorker={handleAddWorker}
+              onDeleteWorker={(workerId) => {
+                const worker = workers.find(w => w.id === workerId);
+                if (worker) setWorkerToDelete(worker);
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        {workers.length > 0 && (
+          <FinancialSummary workers={workers} pricePerNight={group.price_per_night || 0} />
         )}
+        
+        <GroupEditDialog
+          group={group}
+          isOpen={isEditDialogOpen}
+          onClose={() => setIsEditDialogOpen(false)}
+          onSave={handleUpdateGroup}
+        />
+
+        <AlertDialog open={!!workerToDelete} onOpenChange={() => setWorkerToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción no se puede deshacer. Se eliminará al trabajador y todos sus registros de hospedaje.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteWorker}>Eliminar</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
       </div>
     </div>
   );
