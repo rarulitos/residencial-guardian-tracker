@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { exportToExcel } from '@/lib/excel-export';
 import { parseDateString, cn } from '@/lib/utils';
 import GroupEditDialog from '@/components/GroupEditDialog';
+import GroupDetailNavbar from '@/components/navbars/GroupDetailNavbar';
 import {
   Card,
   CardContent,
@@ -313,82 +314,66 @@ const GroupDetail = () => {
   const currentMonth = startDate;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <Link to="/" className="text-sm text-gray-500 hover:underline flex items-center gap-1 mb-2">
-              <ChevronLeft className="h-4 w-4" />
-              Volver a Períodos
-            </Link>
-            <h1 className="text-3xl font-bold text-gray-900">{group.name}</h1>
-            <p className="text-gray-600">
-              Período: {format(startDate, 'dd/MM/yyyy')} - {format(endDate, 'dd/MM/yyyy')}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={handleExportToExcel}>
-              <FileDown className="h-4 w-4 mr-2" />
-              Exportar a Excel
-            </Button>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
-              <Settings className="h-4 w-4 mr-2" />
-              Editar
-            </Button>
-          </div>
-        </header>
+    <div className="min-h-screen bg-gray-50">
+      <GroupDetailNavbar 
+        group={group}
+        onExport={handleExportToExcel}
+        onEdit={() => setIsEditDialogOpen(true)}
+      />
+      <main className="p-4">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Calendario de Hospedaje</CardTitle>
+              <CardDescription>
+                <SaveStatusIndicator status={saveStatus} />
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <HospedajeCalendar
+                workers={currentWorkersForCalendar}
+                currentMonth={currentMonth}
+                startDate={startDate}
+                endDate={endDate}
+                onToggleHospedaje={handleToggleHospedaje}
+                onBulkToggleHospedaje={handleBulkToggleHospedaje}
+                onAddWorker={handleAddWorker}
+                onDeleteWorker={(workerId) => {
+                  const worker = workers.find(w => w.id === workerId);
+                  if (worker) setWorkerToDelete(worker);
+                }}
+              />
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Calendario de Hospedaje</CardTitle>
-            <CardDescription>
-              <SaveStatusIndicator status={saveStatus} />
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <HospedajeCalendar
-              workers={currentWorkersForCalendar}
-              currentMonth={currentMonth}
-              startDate={startDate}
-              endDate={endDate}
-              onToggleHospedaje={handleToggleHospedaje}
-              onBulkToggleHospedaje={handleBulkToggleHospedaje}
-              onAddWorker={handleAddWorker}
-              onDeleteWorker={(workerId) => {
-                const worker = workers.find(w => w.id === workerId);
-                if (worker) setWorkerToDelete(worker);
-              }}
-            />
-          </CardContent>
-        </Card>
+          {workers.length > 0 && (
+            <FinancialSummary {...financialTotals} />
+          )}
+          
+          <GroupEditDialog
+            group={group}
+            isOpen={isEditDialogOpen}
+            onClose={() => setIsEditDialogOpen(false)}
+            onSave={handleUpdateGroup}
+          />
 
-        {workers.length > 0 && (
-          <FinancialSummary {...financialTotals} />
-        )}
-        
-        <GroupEditDialog
-          group={group}
-          isOpen={isEditDialogOpen}
-          onClose={() => setIsEditDialogOpen(false)}
-          onSave={handleUpdateGroup}
-        />
+          <AlertDialog open={!!workerToDelete} onOpenChange={() => setWorkerToDelete(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta acción no se puede deshacer. Se eliminará al trabajador y todos sus registros de hospedaje.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteWorker}>Eliminar</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
-        <AlertDialog open={!!workerToDelete} onOpenChange={() => setWorkerToDelete(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Esta acción no se puede deshacer. Se eliminará al trabajador y todos sus registros de hospedaje.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteWorker}>Eliminar</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-      </div>
+        </div>
+      </main>
     </div>
   );
 };

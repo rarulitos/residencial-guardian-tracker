@@ -12,6 +12,8 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+import MainLayout from "@/components/layout/MainLayout";
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -23,7 +25,9 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={
               <ProtectedRoute>
-                <Index />
+                <MainLayout>
+                  <Index />
+                </MainLayout>
               </ProtectedRoute>
             } />
             <Route path="/groups/:groupId" element={

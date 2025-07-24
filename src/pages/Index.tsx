@@ -206,27 +206,15 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                Control de Hospedaje de Trabajadores
-              </h1>
-              <p className="text-gray-600">
-                Bienvenido, {user?.email}
-              </p>
-            </div>
-            <Button onClick={handleSignOut} variant="outline" className="flex items-center gap-2">
-              <LogOut className="h-4 w-4" />
-              Cerrar Sesión
-            </Button>
-          </div>
-          <p className="text-gray-600">
-            Gestiona el hospedaje diario de trabajadores de forma individual y flexible
-          </p>
-        </div>
+    <>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          Períodos de Facturación
+        </h1>
+        <p className="text-gray-600">
+          Selecciona un período para ver o crear nuevas agrupaciones de trabajadores.
+        </p>
+      </div>
 
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -304,7 +292,6 @@ const Index = () => {
             )}
           </div>
         )}
-      </div>
 
       {/* Create Group Dialog */}
       <Dialog open={isNewGroupDialogOpen} onOpenChange={setIsNewGroupDialogOpen}>
@@ -464,7 +451,7 @@ const Index = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 };
 
