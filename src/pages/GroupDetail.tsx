@@ -59,17 +59,17 @@ const SaveStatusIndicator = ({ status }: { status: SaveStatus }) => {
 };
 
 
-const FinancialSummary = ({ workers, pricePerNight }: { workers: WorkerWithHospedaje[], pricePerNight: number }) => {
-  const totalNights = useMemo(() => {
-    return workers.reduce((total, worker) => {
-      return total + worker.hospedaje.filter(h => h.has_hospedaje).length;
-    }, 0);
-  }, [workers]);
-
-  const totalPrice = totalNights * pricePerNight;
-  const iva = totalPrice * 0.19;
-  const totalWithIva = totalPrice + iva;
-
+const FinancialSummary = ({
+  totalNights,
+  totalNeto,
+  iva,
+  totalConIva,
+}: {
+  totalNights: number;
+  totalNeto: number;
+  iva: number;
+  totalConIva: number;
+}) => {
   return (
     <Card>
       <CardHeader>
@@ -83,7 +83,7 @@ const FinancialSummary = ({ workers, pricePerNight }: { workers: WorkerWithHospe
           </div>
           <div className="p-3 bg-gray-50 rounded-md border">
             <p className="text-sm text-gray-500">Total Neto</p>
-            <p className="text-xl font-bold text-primary">{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(totalPrice)}</p>
+            <p className="text-xl font-bold text-primary">{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(totalNeto)}</p>
           </div>
           <div className="p-3 bg-gray-50 rounded-md border">
             <p className="text-sm text-gray-500">IVA (19%)</p>
@@ -91,7 +91,7 @@ const FinancialSummary = ({ workers, pricePerNight }: { workers: WorkerWithHospe
           </div>
           <div className="p-3 bg-gray-50 rounded-md border">
             <p className="text-sm text-gray-500">Total a Pagar</p>
-            <p className="text-xl font-bold text-green-600">{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(totalWithIva)}</p>
+            <p className="text-xl font-bold text-green-600">{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(totalConIva)}</p>
           </div>
         </div>
       </CardContent>
@@ -124,6 +124,22 @@ const GroupDetail = () => {
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const statusResetTimerRef = useRef<NodeJS.Timeout | null>(null);
   const originalWorkersRef = useRef<WorkerWithHospedaje[]>([]);
+
+  const financialTotals = useMemo(() => {
+    const totalNights = workers.reduce((total, worker) => {
+      return total + worker.hospedaje.filter(h => h.has_hospedaje).length;
+    }, 0);
+    const pricePerNight = group?.price_per_night || 0;
+    const totalNeto = totalNights * pricePerNight;
+    const iva = totalNeto * 0.19;
+    const totalConIva = totalNeto + iva;
+    return { totalNights, totalNeto, iva, totalConIva };
+  }, [workers, group]);
+
+  const handleExportToExcel = () => {
+    if (!group) return;
+    exportToExcel(group, workers);
+  };
 
   const loadGroupData = useCallback(async () => {
     if (!groupId || !user) return;
@@ -311,7 +327,7 @@ const GroupDetail = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={() => exportToExcel(group, workers)}>
+            <Button onClick={handleExportToExcel}>
               <FileDown className="h-4 w-4 mr-2" />
               Exportar a Excel
             </Button>
@@ -347,7 +363,7 @@ const GroupDetail = () => {
         </Card>
 
         {workers.length > 0 && (
-          <FinancialSummary workers={workers} pricePerNight={group.price_per_night || 0} />
+          <FinancialSummary {...financialTotals} />
         )}
         
         <GroupEditDialog
