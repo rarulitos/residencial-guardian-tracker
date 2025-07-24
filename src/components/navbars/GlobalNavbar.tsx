@@ -1,6 +1,7 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
+import Logo from "@/assets/residencial-don-hugo-logo.svg?react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,8 +19,8 @@ const GlobalNavbar = () => {
   return (
     <header className="bg-background border-b px-4 sm:px-6 lg:px-8">
       <div className="container mx-auto flex h-16 items-center justify-between">
-        <Link to="/" className="text-xl font-bold text-primary">
-          Residencial Guardian Tracker
+        <Link to="/">
+          <Logo className="h-10 w-auto text-primary" />
         </Link>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
