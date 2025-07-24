@@ -1,73 +1,110 @@
-# Welcome to your Lovable project
+# Residencial Guardian Tracker
 
-## Project info
+> Una aplicación web para la gestión y seguimiento de hospedaje de trabajadores, diseñada para simplificar la facturación y el control de estadías.
 
-**URL**: https://lovable.dev/projects/e54e5191-8486-41af-9407-9f7f640ce469
+![Residencial Guardian Tracker Screenshot](https://via.placeholder.com/800x450.png?text=Añade+una+captura+de+pantalla+de+tu+app)
+*Reemplaza la imagen de arriba con una captura de pantalla real de la aplicación.*
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## 🎯 Acerca del Proyecto
 
-**Use Lovable**
+**Residencial Guardian Tracker** nace de la necesidad de llevar un control preciso y centralizado de los días que los trabajadores de distintas agrupaciones (como contratistas) se hospedan en una residencial. La aplicación permite crear períodos de facturación mensuales, gestionar agrupaciones, añadir trabajadores y marcar sus días de estadía en un calendario interactivo.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/e54e5191-8486-41af-9407-9f7f640ce469) and start prompting.
+El sistema calcula automáticamente los totales a pagar, incluyendo el IVA, y permite exportar reportes detallados en formato Excel, agilizando drásticamente el proceso de facturación.
 
-Changes made via Lovable will be committed automatically to this repo.
+---
 
-**Use your preferred IDE**
+## ✨ Características Principales
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- **🔐 Autenticación de Usuarios:** Sistema de inicio y cierre de sesión seguro gestionado con Supabase.
+- **📅 Gestión de Períodos de Facturación:** Crea y navega entre períodos mensuales (ej: Agosto 2025, Septiembre 2025).
+- **👥 Administración de Agrupaciones:** Crea, edita y elimina agrupaciones de trabajadores dentro de cada período (ej: "Contratistas Cima").
+- **👷‍♂️ Control de Trabajadores:** Añade y elimina trabajadores fácilmente de cada agrupación.
+- **🗓️ Calendario de Hospedaje Interactivo:** Marca los días de hospedaje de cada trabajador con un solo clic. Los cambios se guardan automáticamente.
+- **📊 Cálculos Financieros Automáticos:** El sistema calcula en tiempo real el total de noches, el neto, el IVA (19%) y el total a pagar.
+- **📄 Exportación a Excel:** Genera un reporte detallado en formato `.xlsx` con el desglose de días y el resumen financiero, listo para ser enviado.
+- **📱 Diseño Responsivo:** Interfaz clara y funcional tanto en escritorio como en dispositivos móviles.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+---
 
-Follow these steps:
+## 🛠️ Stack Tecnológico
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+- **Frontend:** [React](https://reactjs.org/), [Vite](https://vitejs.dev/), [TypeScript](https://www.typescriptlang.org/)
+- **UI/Estilos:** [Tailwind CSS](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/)
+- **Backend & Base de Datos:** [Supabase](https://supabase.io/) (PostgreSQL, Auth, APIs)
+- **Routing:** [React Router](https://reactrouter.com/)
+- **Gestión de Estado:** React Hooks & Context API
+- **Linting:** [ESLint](https://eslint.org/)
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+---
 
-# Step 3: Install the necessary dependencies.
-npm i
+## 🚀 Cómo Empezar
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+Sigue estos pasos para configurar y ejecutar el proyecto en tu entorno local.
+
+### Prerrequisitos
+
+- [Node.js](https://nodejs.org/) (versión 18 o superior)
+- [npm](https://www.npmjs.com/) (generalmente se instala con Node.js)
+- Una cuenta de [Supabase](https://supabase.com/) para crear tu proyecto de backend.
+
+### Instalación y Configuración
+
+1.  **Clona el repositorio:**
+    ```bash
+    git clone https://github.com/tu-usuario/residencial-guardian-tracker.git
+    cd residencial-guardian-tracker
+    ```
+
+2.  **Instala las dependencias del proyecto:**
+    ```bash
+    npm install
+    ```
+
+3.  **Configura las variables de entorno de Supabase:**
+    - Crea un archivo `.env` en la raíz del proyecto. Puedes duplicar el archivo de ejemplo si existe: `cp .env.example .env`.
+    - Añade las siguientes variables a tu archivo `.env`:
+
+      ```env
+      VITE_SUPABASE_URL="TU_PROJECT_URL_DE_SUPABASE"
+      VITE_SUPABASE_ANON_KEY="TU_ANON_KEY_DE_SUPABASE"
+      ```
+
+    - Puedes encontrar estas claves en tu panel de Supabase, en la sección **Project Settings > API**.
+
+4.  **Ejecuta las migraciones en tu base de datos de Supabase:**
+    - Asegúrate de tener el [Supabase CLI](https://supabase.com/docs/guides/cli) instalado.
+    - Conéctate a tu proyecto: `supabase login` y luego `supabase link --project-ref TU_ID_DE_PROYECTO`.
+    - Aplica las migraciones: `supabase db push`.
+
+### Ejecutar la Aplicación
+
+Una vez completada la configuración, inicia el servidor de desarrollo:
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Abre [http://localhost:5173](http://localhost:5173) (o el puerto que indique la consola) en tu navegador para ver la aplicación en funcionamiento.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+---
 
-**Use GitHub Codespaces**
+## 📂 Estructura del Proyecto
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/e54e5191-8486-41af-9407-9f7f640ce469) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+```
+/
+├── supabase/               # Migraciones y configuración de Supabase
+├── src/
+│   ├── assets/             # Archivos estáticos (imágenes, etc.)
+│   ├── components/         # Componentes reutilizables de React (UI, layout, etc.)
+│   ├── contexts/           # React Contexts (ej: AuthContext)
+│   ├── hooks/              # Hooks personalizados (ej: useDatabase)
+│   ├── integrations/       # Integraciones con servicios de terceros (Supabase client)
+│   ├── lib/                # Funciones de utilidad y lógica auxiliar (ej: exportar a Excel)
+│   ├── pages/              # Componentes que representan las páginas de la aplicación
+│   └── types/              # Definiciones de tipos de TypeScript
+├── .env                    # Variables de entorno (local, no versionado)
+├── package.json            # Dependencias y scripts del proyecto
+└── README.md               # Este archivo
+```
