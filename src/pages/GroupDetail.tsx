@@ -19,6 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,33 +31,52 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+import { SendEmailDialog } from '@/components/SendEmailDialog';
+import { supabase } from '@/integrations/supabase/client';
+
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+
+
+// Helper function to convert Blob to Base64
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(',')[1];
+      resolve(base64);
+    };
+    reader.readAsDataURL(blob);
+  });
+};
 
 const SaveStatusIndicator = ({ status }: { status: SaveStatus }) => {
   if (status === 'saving') {
     return (
-      <div className="flex items-center text-sm text-gray-500">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      <Badge variant="secondary" className="inline-flex items-center gap-1">
+        <Loader2 className="h-3 w-3 animate-spin" />
         Guardando...
-      </div>
+      </Badge>
     );
   }
   if (status === 'saved') {
     return (
-      <div className="flex items-center text-sm text-green-600">
-        <CheckCircle className="mr-2 h-4 w-4" />
+      <Badge variant="secondary" className="inline-flex items-center gap-1 bg-green-100 text-green-700 border-green-300">
+        <CheckCircle className="h-3 w-3" />
         Guardado
-      </div>
+      </Badge>
     );
   }
   if (status === 'error') {
     return (
-      <div className="flex items-center text-sm text-red-600">
-        Error al guardar. Se restauró el estado anterior.
-      </div>
+      <Badge variant="destructive" className="inline-flex items-center gap-1">
+        Error
+      </Badge>
     );
   }
-  return <span>Selecciona los días de hospedaje para cada trabajador.</span>;
+  return null;
 };
 
 
@@ -118,6 +138,7 @@ const GroupDetail = () => {
   const [group, setGroup] = useState<Group | null>(null);
   const [workers, setWorkers] = useState<WorkerWithHospedaje[]>([]);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isSendEmailDialogOpen, setIsSendEmailDialogOpen] = useState(false);
   const [workerToDelete, setWorkerToDelete] = useState<Worker | null>(null);
   
   const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
@@ -139,7 +160,46 @@ const GroupDetail = () => {
 
   const handleExportToExcel = () => {
     if (!group) return;
-    exportToExcel(group, workers);
+    exportToExcel(group, workers, { output: 'download' });
+  };
+
+  const handleSendEmail = async (to: string, subject: string, body: string) => {
+    if (!group) return;
+
+    try {
+      // 1. Generar el Blob del archivo Excel
+      const blob = await exportToExcel(group, workers, { output: 'blob' });
+      if (!blob) {
+        throw new Error("No se pudo generar el archivo Excel.");
+      }
+
+      // const attachment = await blobToBase64(blob);
+
+      // 2. Convertir a Base64
+      const attachment = await blobToBase64(blob);
+
+      // 3. Invocar la Edge Function
+      const { error } = await supabase.functions.invoke('send-excel-email', {
+        body: { to, subject, body, attachment },
+      });
+
+      if (error) {
+        throw new Error(`Error al invocar la función: ${error.message}`);
+      }
+
+      toast({
+        title: "Correo Enviado",
+        description: `El reporte ha sido enviado a ${to} exitosamente.`,
+      });
+
+    } catch (error) {
+      console.error("Error al enviar el correo:", error);
+      toast({
+        title: "Error al Enviar",
+        description: (error as Error).message || "Ocurrió un error desconocido.",
+        variant: "destructive",
+      });
+    }
   };
 
   const loadGroupData = useCallback(async () => {
@@ -319,15 +379,21 @@ const GroupDetail = () => {
         group={group}
         onExport={handleExportToExcel}
         onEdit={() => setIsEditDialogOpen(true)}
+        onSendEmail={() => setIsSendEmailDialogOpen(true)}
       />
       <main className="p-4">
         <div className="max-w-7xl mx-auto space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Calendario de Hospedaje</CardTitle>
-              <CardDescription>
+            <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0 p-6">
+              <div className="space-y-1">
+                <CardTitle>Calendario de Hospedaje</CardTitle>
+                <CardDescription>
+                  Selecciona los días de hospedaje para cada trabajador.
+                </CardDescription>
+              </div>
+              <div className="self-start md:self-auto">
                 <SaveStatusIndicator status={saveStatus} />
-              </CardDescription>
+              </div>
             </CardHeader>
             <CardContent>
               <HospedajeCalendar
@@ -355,6 +421,13 @@ const GroupDetail = () => {
             isOpen={isEditDialogOpen}
             onClose={() => setIsEditDialogOpen(false)}
             onSave={handleUpdateGroup}
+          />
+
+          <SendEmailDialog
+            isOpen={isSendEmailDialogOpen}
+            onClose={() => setIsSendEmailDialogOpen(false)}
+            onSend={handleSendEmail}
+            groupName={group.name}
           />
 
           <AlertDialog open={!!workerToDelete} onOpenChange={() => setWorkerToDelete(null)}>
