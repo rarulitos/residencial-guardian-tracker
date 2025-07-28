@@ -18,7 +18,7 @@ const GroupDetailNavbar = ({ group, onExport, onEdit, onSendEmail }: GroupDetail
   const endDate = parseDateString(group.end_date);
 
   return (
-    <header className="bg-background border-b px-4 sm:px-6 lg:px-8 sticky top-0 z-10">
+    <header className="bg-background border-b px-4 sm:px-6 lg:px-8 sticky top-0 z-50">
       <div className="container mx-auto flex flex-col md:flex-row h-auto md:h-16 items-start md:items-center justify-between gap-2 md:gap-4 py-2 md:py-0">
         <div className="flex items-center gap-4 w-full md:w-auto">
           <Link to="/">

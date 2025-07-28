@@ -14,12 +14,17 @@ const totalRowFill: Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb:
 const centerAlignment: Partial<Alignment> = { horizontal: 'center', vertical: 'middle' };
 const boldFont: Partial<Font> = { bold: true };
 
+interface ExportOptions {
+  output: 'download' | 'blob';
+}
+
 export const exportToExcel = async (
   group: Group,
   workers: WorkerWithHospedaje[],
-) => {
+  options: ExportOptions = { output: 'download' }
+): Promise<Blob | void> => {
   if (!group || workers.length === 0) {
-    alert("No hay datos para exportar.");
+    console.error("No hay datos para exportar.");
     return;
   }
 
@@ -55,8 +60,10 @@ export const exportToExcel = async (
   headerRow1.alignment = centerAlignment;
   headerRow2.alignment = centerAlignment;
 
-  headerRow1.eachCell(cell => cell.fill = headerFill);
-  headerRow2.eachCell(cell => cell.fill = headerFill);
+  for (let i = 1; i <= worksheet.columns.length; i++) {
+    headerRow1.getCell(i).fill = headerFill;
+    headerRow2.getCell(i).fill = headerFill;
+  }
 
   dateRange.forEach((date, index) => {
     headerRow2.getCell(4 + index).value = format(date, 'dd/MM');
@@ -85,14 +92,14 @@ export const exportToExcel = async (
       rowData[dateKey] = hospedajeMap[dateKey] ? '✓' : '';
     });
 
-    const addedRow = worksheet.addRow(rowData);
-    addedRow.alignment = centerAlignment;
-    addedRow.getCell('name').alignment = { horizontal: 'left', vertical: 'middle' };
-    addedRow.getCell('position').alignment = { horizontal: 'left', vertical: 'middle' };
-    addedRow.getCell('faena').alignment = { horizontal: 'left', vertical: 'middle' };
+    const newRow = worksheet.addRow(Object.values(rowData));
+    newRow.alignment = centerAlignment;
+    newRow.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
+    newRow.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' };
+    newRow.getCell(3).alignment = { horizontal: 'left', vertical: 'middle' };
 
     // Fórmula para total de días por trabajador
-    const totalDaysCell = addedRow.getCell(totalDaysCol);
+    const totalDaysCell = newRow.getCell(totalDaysCol);
     totalDaysCell.font = boldFont;
     totalDaysCell.value = { formula: `COUNTIF(D${rowNumber}:${worksheet.getColumn(lastDateCol).letter}${rowNumber}, "✓")` };
   });
@@ -145,9 +152,13 @@ export const exportToExcel = async (
   addSummaryRow(summaryStartRow + 3, 'IVA (19%):', { formula: `${netTotalCellAddress}*0.19` }, false, '"$"#,##0');
   addSummaryRow(summaryStartRow + 4, 'Total a pagar:', { formula: `${netTotalCellAddress}+${ivaCellAddress}` }, true, '"$"#,##0');
 
-  // --- 6. Generar y Descargar Archivo ---
-  workbook.xlsx.writeBuffer().then(buffer => {
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  // --- 6. Generar y Devolver Archivo ---
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+  if (options.output === 'download') {
     saveAs(blob, `Hospedaje_${group.name}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
-  });
+  } else {
+    return blob;
+  }
 };
