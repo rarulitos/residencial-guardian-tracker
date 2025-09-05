@@ -142,15 +142,16 @@ export const exportToExcel = async (
   };
 
   const grandTotalFormula = `${grandTotalColLetter}${totalRowNumber}`;
-  const priceCellAddress = `B${summaryStartRow + 1}`;
-  const netTotalCellAddress = `B${summaryStartRow + 2}`;
-  const ivaCellAddress = `B${summaryStartRow + 3}`;
+  const priceCellAddress = `B${summaryStartRow + 2}`;
+  const netTotalCellAddress = `B${summaryStartRow + 3}`;
+  const ivaCellAddress = `B${summaryStartRow + 4}`;
 
   addSummaryRow(summaryStartRow, 'Total días hospedaje:', { formula: grandTotalFormula }, false, '0');
-  addSummaryRow(summaryStartRow + 1, 'Precio unitario:', pricePerNight, false, '"$"#,##0');
-  addSummaryRow(summaryStartRow + 2, 'Total neto:', { formula: `${grandTotalFormula}*${priceCellAddress}` }, false, '"$"#,##0');
-  addSummaryRow(summaryStartRow + 3, 'IVA (19%):', { formula: `${netTotalCellAddress}*0.19` }, false, '"$"#,##0');
-  addSummaryRow(summaryStartRow + 4, 'Total a pagar:', { formula: `${netTotalCellAddress}+${ivaCellAddress}` }, true, '"$"#,##0');
+  addSummaryRow(summaryStartRow + 1, 'Colaciones mensuales:', { formula: grandTotalFormula }, false, '0');
+  addSummaryRow(summaryStartRow + 2, 'Precio unitario:', pricePerNight, false, '"$"#,##0');
+  addSummaryRow(summaryStartRow + 3, 'Total neto:', { formula: `${grandTotalFormula}*${priceCellAddress}` }, false, '"$"#,##0');
+  addSummaryRow(summaryStartRow + 4, 'IVA (19%):', { formula: `${netTotalCellAddress}*0.19` }, false, '"$"#,##0');
+  addSummaryRow(summaryStartRow + 5, 'Total a pagar:', { formula: `${netTotalCellAddress}+${ivaCellAddress}` }, true, '"$"#,##0');
 
   // --- 6. Generar y Devolver Archivo ---
   const buffer = await workbook.xlsx.writeBuffer();
